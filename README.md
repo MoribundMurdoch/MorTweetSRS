@@ -4,6 +4,58 @@ Spaced repetition for a collection of Twitter/X post URLs. Review posts on an An
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**Try the web app:** https://moribundmurdoch.github.io/MorTweetSRS/
+
+## Screenshots
+
+### Study workspace
+
+Collection panel, review card, stats, and SRS grading in one view.
+
+![Study workspace with collection, revealed tweet, and grade buttons](docs/screenshots/01-workspace.jpg)
+
+### Text cover (recall prompt)
+
+A short prompt is shown first. Use **Read aloud** for TTS, or attach a custom audio link when editing the cover.
+
+![Text cover recall prompt with Read aloud and Reveal post](docs/screenshots/02-text-cover.png)
+
+### Image cover
+
+Memes, diagrams, or any image work as a cover — same flip-to-reveal flow.
+
+![Image cover shown before reveal](docs/screenshots/03-image-cover.png)
+
+### Revealed post + grading
+
+After you recall the cover, reveal the embedded X post and rate it **Again / Hard / Good / Easy**.
+
+![Revealed tweet with SRS grade buttons](docs/screenshots/04-revealed-tweet.jpg)
+
+### Add a post
+
+Paste an X post URL and pick a cover type: **None**, **Text**, or **Image**. Text covers support an optional audio link field.
+
+![Add post form with cover type tabs](docs/screenshots/05-add-post.png)
+
+### Bulk URL list
+
+Manage your whole collection as one URL per line.
+
+![Bulk URL list editor](docs/screenshots/06-bulk-urls.png)
+
+### All caught up
+
+When nothing is due, the session ends until the next interval.
+
+![All caught up completion screen](docs/screenshots/07-all-caught-up.png)
+
+### Header controls
+
+Due / New / Today counts, voice engine, linked-audio toggle, auto-speak, and export/import.
+
+![App header with stats and voice controls](docs/screenshots/08-header.jpg)
+
 ## Repository layout
 
 | Path | What it is |
@@ -19,20 +71,26 @@ Twitter embeds need a real HTTP origin (not `file://`):
 
 ```bash
 cd web
-python -m http.server 8787
+python serve.py
 ```
 
 Open http://localhost:8787
 
-You can also deploy `web/` to GitHub Pages, Netlify, or any static host.
+`serve.py` serves the app and exposes a local `spd-say` API for Piper TTS on Arch Linux. Plain `python -m http.server` works too, but without local Piper integration.
+
+The web app is also deployed to **GitHub Pages** on every push to `main`.
 
 ### Features
 
 - Add posts individually or in bulk
 - Optional **cover** per post (text or image) — recall prompt before reveal
+- Optional **audio link** per text cover (direct `.mp3`/`.wav` or YouTube)
+- Free TTS: auto-speak, online fallback, Piper/spd-say on Linux
 - Edit covers later via **✎** on any saved post
 - **Again / Hard / Good / Easy** grading (`1`–`4`)
 - `localStorage` persistence + JSON export/import
+
+**Desktop packages:** see [Releases](https://github.com/MoribundMurdoch/MorTweetSRS/releases/latest) for `.deb`, `.rpm`, and Arch builds.
 
 ## Desktop app
 
