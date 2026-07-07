@@ -1,0 +1,40 @@
+# Maintainer: Moribund Murdoch <moribundmurdoch@gmail.com>
+
+pkgname=mor-tweet-srs
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Spaced repetition for saved X/Twitter posts."
+arch=('x86_64')
+url="https://github.com/MoribundMurdoch/MorTweetSRS"
+license=('MIT')
+makedepends=('cargo')
+depends=(
+  'webkit2gtk-4.1'
+  'gtk3'
+  'openssl'
+  'xdotool'
+)
+options=('!debug')
+source=()
+sha256sums=()
+
+build() {
+  cd "${startdir}/../.."
+  cargo build --release --locked
+}
+
+package() {
+  local root="${startdir}/../.."
+
+  install -Dm755 "${root}/target/release/mor_tweet_srs_desktop" \
+    "${pkgdir}/usr/bin/mor_tweet_srs_desktop"
+
+  install -Dm644 "${startdir}/mor-tweet-srs.desktop" \
+    "${pkgdir}/usr/share/applications/mor-tweet-srs.desktop"
+
+  install -Dm644 "${root}/desktop/assets/icon.png" \
+    "${pkgdir}/usr/share/icons/hicolor/400x400/apps/mor_tweet_srs_desktop.png"
+
+  install -Dm644 "${root}/LICENSE" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

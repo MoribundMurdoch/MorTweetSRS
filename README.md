@@ -61,11 +61,36 @@ dx serve --platform desktop
 ### Release build
 
 ```bash
-cd desktop
-dx bundle --platform desktop
+cargo build --release
 ```
 
-The bundled app is written under `desktop/target/dx/`.
+Binary: `target/release/mor_tweet_srs_desktop`
+
+### Linux packages
+
+Build Debian, Fedora/RHEL, and Arch packages from the repo root:
+
+```bash
+./packaging/build-packages.sh
+```
+
+Artifacts land in `packaging/dist/`:
+
+| Distro | Package | Install |
+|--------|---------|---------|
+| Debian / Ubuntu | `mor-tweet-srs-desktop_0.1.0_amd64.deb` | `sudo dpkg -i mor-tweet-srs-desktop_*.deb` |
+| Fedora / RHEL | `mor_tweet_srs_desktop-0.1.0-1.x86_64.rpm` | `sudo dnf install ./mor_tweet_srs_desktop-*.rpm` |
+| Arch Linux | `mor-tweet-srs-0.1.0-1-x86_64.pkg.tar.zst` | `sudo pacman -U mor-tweet-srs-*.pkg.tar.zst` |
+
+Individual builds:
+
+```bash
+dx bundle --platform desktop --package-types deb   # .deb
+dx bundle --platform desktop --package-types rpm   # .rpm
+cd packaging/arch && makepkg -f                    # Arch
+```
+
+The `.deb` and `.rpm` from `dx bundle` are self-contained fat binaries (~50 MB). The Arch package links against system WebKit/GTK (~3 MB).
 
 ## License
 

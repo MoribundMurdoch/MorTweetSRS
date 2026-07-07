@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MorTweet SRS
+Comment=Spaced repetition for saved X posts.
+Exec=mor_tweet_srs_desktop
+Icon=mor_tweet_srs_desktop
+Categories=Education;
+StartupWMClass=com.moribundmurdoch.mortweet-srs
+Terminal=false

@@ -13,7 +13,12 @@ watch_path = ["src", "assets", "../web"]
 identifier = "com.moribundmurdoch.mortweet-srs"
 publisher = "Moribund Murdoch"
 icon = ["assets/icon.png"]
-
 category = "Education"
 short_description = "Spaced repetition for saved X posts."
 long_description = "MorTweet SRS reviews a collection of Twitter/X post URLs on a spaced schedule, with optional flip-card covers."
+
+[bundle.deb]
+depends = ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libssl3"]
+
+[bundle.rpm]
+depends = ["webkit2gtk4.1", "gtk3", "openssl"]
