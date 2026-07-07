@@ -299,12 +299,14 @@ function renderGradeButtons() {
 
 function syncTtsControls(cover) {
   const supported = ttsSupported();
-  els.ttsBtn?.classList.toggle("active", supported && autoSpeakEnabled());
-  els.ttsBtn?.title = supported
-    ? autoSpeakEnabled()
-      ? "Auto-read text covers (on)"
-      : "Auto-read text covers (off)"
-    : "Text-to-speech unavailable in this browser";
+  if (els.ttsBtn) {
+    els.ttsBtn.classList.toggle("active", supported && autoSpeakEnabled());
+    els.ttsBtn.title = supported
+      ? autoSpeakEnabled()
+        ? "Auto-read text covers (on)"
+        : "Auto-read text covers (off)"
+      : "Text-to-speech unavailable in this browser";
+  }
 
   const textCover = cover?.type === "text";
   els.coverSpeakBtn?.classList.toggle("hidden", !textCover);
