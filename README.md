@@ -52,11 +52,9 @@ cargo run
 ./run-desktop.sh
 ```
 
-Or from `desktop/` directly:
+`dx serve` must run from the repo root (workspace `Cargo.toml`):
 
 ```bash
-cd desktop
-cargo run
 dx serve --platform desktop
 ```
 
