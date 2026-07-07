@@ -446,6 +446,50 @@
   min-height: 0;
 }
 
+.cover-media-tag {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--editor-accent) 14%, transparent);
+  color: var(--editor-accent);
+}
+
+.cover-youtube-host:not(:empty) {
+  margin-top: 12px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--editor-border-soft);
+}
+
+.cover-youtube-frame {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #000;
+}
+
+.cover-audio-pref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--editor-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.cover-audio-pref input {
+  accent-color: var(--editor-accent);
+}
+
 .cover-text {
   margin: 0;
   font-family: var(--font-display);

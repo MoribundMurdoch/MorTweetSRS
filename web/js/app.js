@@ -28,6 +28,15 @@ import {
   setTtsProvider,
   ttsProviderLabel,
 } from "./tts.js";
+import {
+  parseCoverMedia,
+  playCoverMedia,
+  stopCoverMedia,
+  isCoverMediaPlaying,
+  preferCoverAudioEnabled,
+  setPreferCoverAudio,
+  setYoutubeHost,
+} from "./cover-audio.js";
 import { parseDeckFile } from "./import-deck.js";
 
 /** @type {ReturnType<typeof loadCollection>} */
@@ -75,6 +84,8 @@ const els = {
   flipCard: document.getElementById("flip-card"),
   coverPanel: document.getElementById("cover-panel"),
   coverContent: document.getElementById("cover-content"),
+  coverYoutubeHost: document.getElementById("cover-youtube-host"),
+  preferCoverAudio: document.getElementById("prefer-cover-audio"),
   revealBtn: document.getElementById("reveal-btn"),
   tweetPanel: document.getElementById("tweet-panel"),
   tweetFrame: document.getElementById("tweet-frame"),
@@ -301,33 +312,55 @@ function renderGradeButtons() {
   });
 }
 
+function isCoverPlaybackActive() {
+  return isSpeaking() || isCoverMediaPlaying();
+}
+
+function stopCoverPlayback() {
+  stopSpeech();
+  stopCoverMedia();
+}
+
 function syncTtsControls(cover) {
   const supported = ttsSupported();
   if (els.ttsProvider) {
     els.ttsProvider.value = getTtsProvider();
   }
+  if (els.preferCoverAudio) {
+    els.preferCoverAudio.checked = preferCoverAudioEnabled();
+  }
   if (els.ttsBtn) {
     els.ttsBtn.classList.toggle("active", supported && autoSpeakEnabled());
     els.ttsBtn.title = supported
       ? autoSpeakEnabled()
-        ? `Auto-read text covers (on) · ${ttsProviderLabel()}`
-        : `Auto-read text covers (off) · ${ttsProviderLabel()}`
+        ? `Auto-play covers (on) · ${ttsProviderLabel()}`
+        : `Auto-play covers (off) · ${ttsProviderLabel()}`
       : "Text-to-speech unavailable in this browser";
   }
 
   const textCover = cover?.type === "text";
+  const media = textCover && preferCoverAudioEnabled() ? parseCoverMedia(cover.content) : null;
+  const canPlay = textCover && (media || supported);
+
   els.coverSpeakBtn?.classList.toggle("hidden", !textCover);
-  els.coverSpeakBtn?.classList.toggle("is-speaking", isSpeaking());
+  els.coverSpeakBtn?.classList.toggle("is-speaking", isCoverPlaybackActive());
   if (els.coverSpeakBtn) {
-    const speaking = isSpeaking();
+    const playing = isCoverPlaybackActive();
     const label = els.coverSpeakBtn.querySelector(".cover-speak-label");
-    if (label) label.textContent = speaking ? "Stop" : "Read aloud";
-    els.coverSpeakBtn.disabled = !supported;
-    els.coverSpeakBtn.title = supported
-      ? speaking
-        ? "Stop reading"
-        : "Read cover text aloud"
-      : "Speech not supported here — try Chrome or Firefox over http://localhost";
+    if (label) {
+      if (playing) label.textContent = "Stop";
+      else if (media?.type === "youtube") label.textContent = "Play YouTube";
+      else if (media?.type === "audio") label.textContent = "Play audio";
+      else label.textContent = "Read aloud";
+    }
+    els.coverSpeakBtn.disabled = !canPlay;
+    els.coverSpeakBtn.title = !canPlay
+      ? "Add a text cover to play audio"
+      : playing
+        ? "Stop playback"
+        : media
+          ? "Play the linked audio from this cover"
+          : "Read cover text aloud";
   }
 }
 
@@ -365,8 +398,26 @@ function ttsErrorAlert(reason) {
   );
 }
 
-function speakCover(cover) {
+function playCover(cover) {
   if (cover?.type !== "text") return;
+
+  const media = preferCoverAudioEnabled() ? parseCoverMedia(cover.content) : null;
+  if (media) {
+    void playCoverMedia(media, {
+      onEnd: () => syncTtsControls(postCover(currentPost())),
+      onError: (reason) => {
+        alert(
+          media.type === "youtube"
+            ? `Could not play YouTube audio (${reason}). Check the link or your connection.`
+            : `Could not play audio link (${reason}). Check the URL is a direct .mp3/.wav file.`,
+        );
+        syncTtsControls(cover);
+      },
+    });
+    syncTtsControls(cover);
+    return;
+  }
+
   if (!ttsSupported()) {
     ttsUnavailableAlert();
     return;
@@ -384,7 +435,7 @@ function speakCover(cover) {
 
 function maybeAutoSpeakCover(cover) {
   if (cover?.type !== "text" || !autoSpeakEnabled()) return;
-  speakCover(cover);
+  playCover(cover);
 }
 
 function replayCardAnimation() {
@@ -398,7 +449,7 @@ async function revealPost() {
   const post = currentPost();
   if (!post || cardRevealed) return;
 
-  stopSpeech();
+  stopCoverPlayback();
   cardRevealed = true;
   els.flipCard?.classList.add("is-revealed");
   els.coverPanel?.classList.add("hidden");
@@ -409,7 +460,7 @@ async function revealPost() {
 }
 
 async function showCurrentCard() {
-  stopSpeech();
+  stopCoverPlayback();
   cardRevealed = false;
   els.flipCard?.classList.remove("is-revealed");
   els.tweetFrame.innerHTML = "";
@@ -563,18 +614,22 @@ function bindEvents() {
   els.coverSpeakBtn?.addEventListener("click", () => {
     const cover = postCover(currentPost());
     if (cover?.type !== "text") return;
-    primeTts();
-    if (isSpeaking()) {
-      stopSpeech();
+    if (isCoverPlaybackActive()) {
+      stopCoverPlayback();
       syncTtsControls(cover);
     } else {
-      speakCover(cover);
+      playCover(cover);
     }
+  });
+
+  els.preferCoverAudio?.addEventListener("change", () => {
+    setPreferCoverAudio(els.preferCoverAudio.checked);
+    syncTtsControls(postCover(currentPost()));
   });
 
   els.ttsProvider?.addEventListener("change", () => {
     setTtsProvider(/** @type {'auto' | 'online' | 'local'} */ (els.ttsProvider.value));
-    stopSpeech();
+    stopCoverPlayback();
     syncTtsControls(postCover(currentPost()));
   });
 
@@ -587,10 +642,9 @@ function bindEvents() {
     syncTtsControls(postCover(currentPost()));
     const cover = postCover(currentPost());
     if (autoSpeakEnabled() && cover?.type === "text" && !cardRevealed) {
-      primeTts();
-      speakCover(cover);
+      playCover(cover);
     } else {
-      stopSpeech();
+      stopCoverPlayback();
     }
   });
 
@@ -732,6 +786,7 @@ function initTheme() {
   }
 }
 
+setYoutubeHost(els.coverYoutubeHost);
 addCoverForm.reset();
 initTheme();
 syncTtsControls(null);

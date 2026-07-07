@@ -47,6 +47,10 @@
           <option value="online">Online</option>
           <option value="local">Local</option>
         </select>
+        <label class="cover-audio-pref" title="Play audio or YouTube links in text covers before TTS">
+          <input type="checkbox" id="prefer-cover-audio" checked />
+          <span>Link audio</span>
+        </label>
         <button class="mor-btn icon-btn" id="tts-btn" title="Toggle cover text-to-speech" aria-label="Toggle cover text-to-speech">
           <span class="icon" aria-hidden="true">🔊</span>
         </button>
@@ -93,7 +97,7 @@
               </div>
               <div class="cover-fields">
                 <div class="cover-field hidden" id="cover-text-field">
-                  <textarea class="mor-textarea" id="cover-text-input" placeholder="Prompt yourself — e.g. a term, question, or hint"></textarea>
+                  <textarea class="mor-textarea" id="cover-text-input" placeholder="Prompt, audio URL (.mp3), or YouTube link"></textarea>
                 </div>
                 <div class="cover-field hidden" id="cover-image-field">
                   <input class="mor-input" id="cover-image-url" type="url" placeholder="Image URL" />
@@ -133,7 +137,7 @@
             </div>
             <div class="cover-fields">
               <div class="cover-field hidden" id="edit-cover-text-field">
-                <textarea class="mor-textarea" id="edit-cover-text-input" placeholder="Prompt yourself — e.g. a term, question, or hint"></textarea>
+                <textarea class="mor-textarea" id="edit-cover-text-input" placeholder="Prompt, audio URL (.mp3), or YouTube link"></textarea>
               </div>
               <div class="cover-field hidden" id="edit-cover-image-field">
                 <input class="mor-input" id="edit-cover-image-url" type="url" placeholder="Image URL" />
@@ -192,6 +196,7 @@
               <div class="cover-panel hidden" id="cover-panel">
                 <div class="cover-panel-label">Recall prompt</div>
                 <div class="cover-panel-content mor-scroll" id="cover-content"></div>
+                <div class="cover-youtube-host" id="cover-youtube-host" aria-hidden="true"></div>
                 <button type="button" class="mor-btn cover-speak-btn hidden" id="cover-speak-btn">
                   <span class="icon" aria-hidden="true">🔊</span>
                   <span class="cover-speak-label">Read aloud</span>
@@ -235,6 +240,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=8"></script>
+  <script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>

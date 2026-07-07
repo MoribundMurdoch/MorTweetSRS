@@ -1,3 +1,5 @@
+import { parseCoverMedia } from "./cover-audio.js";
+
 /** @typedef {'text' | 'image'} CoverType */
 
 /**
@@ -26,7 +28,11 @@ export function postCover(post) {
 /** @param {Cover | null} cover */
 export function coverLabel(cover) {
   if (!cover) return "";
-  return cover.type === "image" ? "image cover" : "text cover";
+  if (cover.type === "image") return "image cover";
+  const media = parseCoverMedia(cover.content);
+  if (media?.type === "audio") return "audio cover";
+  if (media?.type === "youtube") return "youtube cover";
+  return "text cover";
 }
 
 /**
@@ -59,6 +65,14 @@ export function renderCover(container, cover) {
     p.className = "cover-text";
     p.textContent = cover.content;
     container.appendChild(p);
+
+    const media = parseCoverMedia(cover.content);
+    if (media) {
+      const tag = document.createElement("span");
+      tag.className = "cover-media-tag";
+      tag.textContent = media.type === "youtube" ? "YouTube link" : "Audio link";
+      container.appendChild(tag);
+    }
     return;
   }
 
