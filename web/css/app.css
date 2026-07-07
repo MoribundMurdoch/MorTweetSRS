@@ -33,19 +33,12 @@
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 40px;
+  height: 40px;
+  display: block;
   border-radius: var(--radius-sm);
-  background: linear-gradient(145deg, #2e3548, #1a1e27);
-  color: var(--editor-accent);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  border: 1px solid color-mix(in srgb, var(--editor-accent) 35%, var(--editor-border));
-  box-shadow: none;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .brand-text h1 {
