@@ -44,8 +44,19 @@ cargo install dioxus-cli --locked
 
 ### Run in development
 
+From the repo root:
+
+```bash
+cargo run
+# or, with hot reload:
+./run-desktop.sh
+```
+
+Or from `desktop/` directly:
+
 ```bash
 cd desktop
+cargo run
 dx serve --platform desktop
 ```
 
