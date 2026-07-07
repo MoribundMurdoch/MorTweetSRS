@@ -1,0 +1,41 @@
+name: Release desktop packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked
+
+      - name: Install packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm libwebkit2gtk-4.1-dev libgtk-3-dev libssl-dev libxdo-dev
+
+      - name: Build Debian and RPM packages
+        run: |
+          dx bundle --platform desktop --package-types deb
+          dx bundle --platform desktop --package-types rpm
+          mkdir -p packaging/dist
+          cp target/dx/mor_tweet_srs_desktop/bundle/linux/deb/*.deb packaging/dist/
+          cp target/dx/mor_tweet_srs_desktop/bundle/linux/rpm/*.rpm packaging/dist/
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            packaging/dist/*.deb
+            packaging/dist/*.rpm
+            packaging/dist/*.pkg.tar.zst
