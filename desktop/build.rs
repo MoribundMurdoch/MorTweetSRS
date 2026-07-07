@@ -1,5 +1,6 @@
+use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn copy_dir(src: &Path, dst: &Path) {
     if dst.exists() {
@@ -23,8 +24,10 @@ fn copy_dir(src: &Path, dst: &Path) {
 }
 
 fn main() {
-    let web = Path::new("../web");
-    let out = Path::new("assets/app");
-    copy_dir(web, out);
-    println!("cargo:rerun-if-changed=../web");
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let web = manifest_dir.join("../web");
+    let app_assets = manifest_dir.join("assets/app");
+
+    copy_dir(&web, &app_assets);
+    println!("cargo:rerun-if-changed={}", web.display());
 }

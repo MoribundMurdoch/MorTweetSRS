@@ -1,3 +1,5 @@
+mod web_assets;
+
 use dioxus::desktop::tao::window::Icon;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
@@ -13,7 +15,7 @@ fn load_app_icon() -> Option<Icon> {
 fn App() -> Element {
     rsx! {
         iframe {
-            src: "/app/index.html",
+            src: "mortweet://app/index.html",
             title: "MorTweet SRS",
             style: "position:fixed;inset:0;width:100%;height:100%;border:0;margin:0;padding:0;",
         }
@@ -39,7 +41,10 @@ fn main() {
         .with_menu(None::<dioxus::desktop::muda::Menu>)
         .with_window(window)
         .with_disable_drag_drop_handler(true)
-        .with_background_color((18, 20, 26, 255));
+        .with_background_color((18, 20, 26, 255))
+        .with_asynchronous_custom_protocol("mortweet", |_id, request, responder| {
+            responder.respond(web_assets::serve(&request));
+        });
 
     LaunchBuilder::new().with_cfg(cfg).launch(App);
 }

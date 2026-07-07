@@ -11,7 +11,7 @@ Spaced repetition for a collection of Twitter/X post URLs. Review posts on an An
 | [`web/`](web/) | Static web app — host anywhere or open via a local server |
 | [`desktop/`](desktop/) | Dioxus 0.7 desktop shell (wraps the same `web/` UI) |
 
-Both targets share the same JavaScript app in `web/`. The desktop build copies `web/` into its assets at compile time.
+Both targets share the same JavaScript app in `web/`. The desktop build copies `web/` into `desktop/assets/app/` at compile time and embeds it in the binary (served via a `mortweet://` custom protocol inside an iframe).
 
 ## Web app
 
