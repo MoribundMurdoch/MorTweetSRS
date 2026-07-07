@@ -25,6 +25,7 @@ import {
   isSpeaking,
   primeTts,
 } from "./tts.js";
+import { parseDeckFile } from "./import-deck.js";
 
 /** @type {ReturnType<typeof loadCollection>} */
 let collection = loadCollection();
@@ -582,36 +583,26 @@ function bindEvents() {
     URL.revokeObjectURL(a.href);
   });
 
-  // Clear before the native picker opens so the same deck file can be chosen again.
-  els.importBtn?.addEventListener("mousedown", () => {
-    if (els.importFile) els.importFile.value = "";
-  });
-
-  els.importFile?.addEventListener("change", async () => {
-    const file = els.importFile.files?.[0];
+  async function handleImportFile(file) {
     if (!file) return;
 
     if (
       collection.posts.length > 0 &&
       !confirm(`Import "${file.name}"? This replaces your current collection (${collection.posts.length} posts).`)
     ) {
-      els.importFile.value = "";
       return;
     }
 
-    let text;
+    let result;
     try {
-      text = await file.text();
+      result = await parseDeckFile(file);
     } catch {
       alert("Could not read the file.");
-      els.importFile.value = "";
       return;
     }
 
-    const result = importJson(text);
     if (!result.ok) {
       alert(result.error);
-      els.importFile.value = "";
       return;
     }
 
@@ -619,8 +610,33 @@ function bindEvents() {
     bulkDirty = false;
     editingPostId = null;
     closeEditCover();
-    els.importFile.value = "";
     startSession();
+    alert(`Imported ${result.count} post${result.count === 1 ? "" : "s"} from ${file.name}.`);
+  }
+
+  const onImportInput = async () => {
+    const file = els.importFile?.files?.[0];
+    if (!file) return;
+    await handleImportFile(file);
+    if (els.importFile) els.importFile.value = "";
+  };
+
+  els.importFile?.addEventListener("change", onImportInput);
+
+  window.addEventListener("message", async (event) => {
+    const data = event.data;
+    if (!data || data.type !== "mortweet-import" || typeof data.json !== "string") return;
+    const result = importJson(data.json);
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
+    collection = result.collection;
+    bulkDirty = false;
+    editingPostId = null;
+    closeEditCover();
+    startSession();
+    alert(`Imported ${result.collection.posts.length} posts.`);
   });
 
   els.studyAgainBtn.addEventListener("click", startSession);

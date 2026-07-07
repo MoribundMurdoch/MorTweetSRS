@@ -11,13 +11,17 @@ fn load_app_icon() -> Option<Icon> {
     Icon::from_rgba(img.into_raw(), width, height).ok()
 }
 
+/// Brief splash while the webview navigates to the embedded web app (top-level, not iframe).
 #[component]
-fn App() -> Element {
+fn Bootstrap() -> Element {
+    use_effect(|| {
+        document::eval(r#"window.location.replace("mortweet://app/index.html");"#);
+    });
+
     rsx! {
-        iframe {
-            src: "mortweet://app/index.html",
-            title: "MorTweet SRS",
-            style: "position:fixed;inset:0;width:100%;height:100%;border:0;margin:0;padding:0;",
+        div {
+            style: "display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#12141a;color:#9aa3b2;font-family:sans-serif;",
+            "Loading MorTweet SRS…"
         }
     }
 }
@@ -46,5 +50,5 @@ fn main() {
             responder.respond(web_assets::serve(&request));
         });
 
-    LaunchBuilder::new().with_cfg(cfg).launch(App);
+    LaunchBuilder::new().with_cfg(cfg).launch(Bootstrap);
 }
