@@ -1,3 +1,4 @@
+import { normalizeCover } from "./cover.js";
 import { newSrsState, isDue } from "./srs.js";
 
 /** @typedef {'new' | 'learning' | 'review'} CardState */
@@ -18,6 +19,7 @@ import { newSrsState, isDue } from "./srs.js";
  * @typedef {Object} Cover
  * @property {CoverType} type
  * @property {string} content
+ * @property {string} [audioUrl]
  */
 
 /**
@@ -53,8 +55,8 @@ export function emptyCollection() {
 
 /** @param {TweetPost} post */
 function normalizePost(post) {
-  if (post.cover?.type && post.cover.content) {
-    return { ...post, cover: { type: post.cover.type, content: post.cover.content.trim() } };
+  if (post.cover) {
+    return { ...post, cover: normalizeCover(post.cover) };
   }
   if (post.note?.trim()) {
     return { ...post, cover: { type: "text", content: post.note.trim() }, note: undefined };

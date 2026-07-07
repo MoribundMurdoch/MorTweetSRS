@@ -593,6 +593,19 @@
   min-height: 72px;
 }
 
+.cover-audio-label {
+  margin-top: 10px;
+}
+
+.cover-audio-hint {
+  margin-top: 6px;
+}
+
+.cover-text-muted {
+  color: var(--editor-muted);
+  font-style: italic;
+}
+
 .cover-upload-row {
   display: flex;
   align-items: center;

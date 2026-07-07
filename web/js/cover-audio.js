@@ -85,6 +85,23 @@ function urlsInText(text) {
 }
 
 /**
+ * @param {{ type: string, content: string, audioUrl?: string } | null | undefined} cover
+ * @returns {CoverMedia | null}
+ */
+export function getCoverMedia(cover) {
+  if (!cover || cover.type !== "text") return null;
+
+  const linked = cover.audioUrl?.trim();
+  if (linked) {
+    if (isAudioUrl(linked)) return { type: "audio", url: linked };
+    const videoId = youtubeVideoId(linked);
+    if (videoId) return { type: "youtube", url: linked, videoId };
+  }
+
+  return parseCoverMedia(cover.content);
+}
+
+/**
  * @param {string} text
  * @returns {CoverMedia | null}
  */

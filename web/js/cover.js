@@ -1,4 +1,4 @@
-import { parseCoverMedia } from "./cover-audio.js";
+import { getCoverMedia, parseCoverMedia } from "./cover-audio.js";
 
 /** @typedef {'text' | 'image'} CoverType */
 
@@ -6,6 +6,7 @@ import { parseCoverMedia } from "./cover-audio.js";
  * @typedef {Object} Cover
  * @property {CoverType} type
  * @property {string} content
+ * @property {string} [audioUrl]
  */
 
 /** @param {unknown} cover */
@@ -13,8 +14,20 @@ export function normalizeCover(cover) {
   if (!cover || typeof cover !== "object") return null;
   const c = /** @type {Cover} */ (cover);
   if (c.type !== "text" && c.type !== "image") return null;
-  if (!c.content || typeof c.content !== "string" || !c.content.trim()) return null;
-  return { type: c.type, content: c.content.trim() };
+
+  if (c.type === "image") {
+    if (!c.content || typeof c.content !== "string" || !c.content.trim()) return null;
+    return { type: "image", content: c.content.trim() };
+  }
+
+  const content = typeof c.content === "string" ? c.content.trim() : "";
+  const audioUrl = typeof c.audioUrl === "string" ? c.audioUrl.trim() : "";
+  if (!content && !audioUrl) return null;
+
+  /** @type {Cover} */
+  const normalized = { type: "text", content };
+  if (audioUrl) normalized.audioUrl = audioUrl;
+  return normalized;
 }
 
 /** @param {import('./store.js').TweetPost | null | undefined} post */
@@ -29,10 +42,33 @@ export function postCover(post) {
 export function coverLabel(cover) {
   if (!cover) return "";
   if (cover.type === "image") return "image cover";
-  const media = parseCoverMedia(cover.content);
+  const media = getCoverMedia(cover);
   if (media?.type === "audio") return "audio cover";
   if (media?.type === "youtube") return "youtube cover";
   return "text cover";
+}
+
+/** @param {Cover} cover */
+export function splitCoverText(cover) {
+  if (cover.type !== "text") return { prompt: "", audioUrl: "" };
+  if (cover.audioUrl?.trim()) {
+    return { prompt: cover.content.trim(), audioUrl: cover.audioUrl.trim() };
+  }
+
+  const media = parseCoverMedia(cover.content);
+  if (!media) return { prompt: cover.content, audioUrl: "" };
+
+  const prompt = cover.content
+    .replace(media.url, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { prompt, audioUrl: media.url };
+}
+
+/** @param {Cover | null | undefined} cover */
+export function coverSpeechText(cover) {
+  if (!cover || cover.type !== "text") return "";
+  return cover.content.trim();
 }
 
 /**
@@ -40,12 +76,19 @@ export function coverLabel(cover) {
  * @param {string} text
  * @param {string} imageUrl
  * @param {string} imageData
+ * @param {string} [audioUrl]
  * @returns {Cover | null}
  */
-export function coverFromInputs(type, text, imageUrl, imageData) {
+export function coverFromInputs(type, text, imageUrl, imageData, audioUrl = "") {
   if (type === "text") {
     const content = text.trim();
-    return content ? { type: "text", content } : null;
+    const linked = audioUrl.trim();
+    if (!content && !linked) return null;
+
+    /** @type {Cover} */
+    const cover = { type: "text", content };
+    if (linked) cover.audioUrl = linked;
+    return cover;
   }
   if (type === "image") {
     const content = imageData || imageUrl.trim();
@@ -61,17 +104,25 @@ export function coverFromInputs(type, text, imageUrl, imageData) {
 export function renderCover(container, cover) {
   container.innerHTML = "";
   if (cover.type === "text") {
-    const p = document.createElement("p");
-    p.className = "cover-text";
-    p.textContent = cover.content;
-    container.appendChild(p);
+    const prompt = cover.content.trim();
+    if (prompt) {
+      const p = document.createElement("p");
+      p.className = "cover-text";
+      p.textContent = prompt;
+      container.appendChild(p);
+    }
 
-    const media = parseCoverMedia(cover.content);
+    const media = getCoverMedia(cover);
     if (media) {
       const tag = document.createElement("span");
       tag.className = "cover-media-tag";
-      tag.textContent = media.type === "youtube" ? "YouTube link" : "Audio link";
+      tag.textContent = media.type === "youtube" ? "YouTube audio" : "Linked audio";
       container.appendChild(tag);
+    } else if (!prompt) {
+      const p = document.createElement("p");
+      p.className = "cover-text cover-text-muted";
+      p.textContent = "Audio cover";
+      container.appendChild(p);
     }
     return;
   }

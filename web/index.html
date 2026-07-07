@@ -97,7 +97,10 @@
               </div>
               <div class="cover-fields">
                 <div class="cover-field hidden" id="cover-text-field">
-                  <textarea class="mor-textarea" id="cover-text-input" placeholder="Prompt, audio URL (.mp3), or YouTube link"></textarea>
+                  <textarea class="mor-textarea" id="cover-text-input" placeholder="Recall prompt shown on the card"></textarea>
+                  <label class="mor-input-label cover-audio-label" for="cover-audio-url">Audio link (optional)</label>
+                  <input class="mor-input" id="cover-audio-url" type="url" placeholder="https://…/clip.mp3 or YouTube link" />
+                  <p class="panel-hint cover-audio-hint">Plays instead of text-to-speech. Use a direct .mp3/.wav link or YouTube.</p>
                 </div>
                 <div class="cover-field hidden" id="cover-image-field">
                   <input class="mor-input" id="cover-image-url" type="url" placeholder="Image URL" />
@@ -137,7 +140,10 @@
             </div>
             <div class="cover-fields">
               <div class="cover-field hidden" id="edit-cover-text-field">
-                <textarea class="mor-textarea" id="edit-cover-text-input" placeholder="Prompt, audio URL (.mp3), or YouTube link"></textarea>
+                <textarea class="mor-textarea" id="edit-cover-text-input" placeholder="Recall prompt shown on the card"></textarea>
+                <label class="mor-input-label cover-audio-label" for="edit-cover-audio-url">Audio link (optional)</label>
+                <input class="mor-input" id="edit-cover-audio-url" type="url" placeholder="https://…/clip.mp3 or YouTube link" />
+                <p class="panel-hint cover-audio-hint">Plays instead of text-to-speech. Use a direct .mp3/.wav link or YouTube.</p>
               </div>
               <div class="cover-field hidden" id="edit-cover-image-field">
                 <input class="mor-input" id="edit-cover-image-url" type="url" placeholder="Image URL" />
@@ -240,6 +246,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=12"></script>
+  <script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>

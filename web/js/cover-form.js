@@ -1,10 +1,11 @@
-import { coverFromInputs } from "./cover.js";
+import { coverFromInputs, splitCoverText } from "./cover.js";
 
 /**
  * @typedef {Object} CoverFormHandles
  * @property {HTMLElement} textField
  * @property {HTMLElement} imageField
  * @property {HTMLTextAreaElement} textInput
+ * @property {HTMLInputElement} [audioUrl]
  * @property {HTMLInputElement} imageUrl
  * @property {HTMLInputElement} imageFile
  * @property {HTMLElement} fileName
@@ -33,6 +34,7 @@ export function createCoverForm(handles, tabSelector) {
 
   function reset() {
     handles.textInput.value = "";
+    if (handles.audioUrl) handles.audioUrl.value = "";
     handles.imageUrl.value = "";
     handles.imageFile.value = "";
     imageData = "";
@@ -51,7 +53,9 @@ export function createCoverForm(handles, tabSelector) {
     }
     if (cover.type === "text") {
       setType("text");
-      handles.textInput.value = cover.content;
+      const { prompt, audioUrl } = splitCoverText(cover);
+      handles.textInput.value = prompt;
+      if (handles.audioUrl) handles.audioUrl.value = audioUrl;
       return;
     }
     setType("image");
@@ -69,7 +73,13 @@ export function createCoverForm(handles, tabSelector) {
   }
 
   function getCover() {
-    return coverFromInputs(type, handles.textInput.value, handles.imageUrl.value, imageData);
+    return coverFromInputs(
+      type,
+      handles.textInput.value,
+      handles.imageUrl.value,
+      imageData,
+      handles.audioUrl?.value ?? "",
+    );
   }
 
   /** @param {string} dataUrl */

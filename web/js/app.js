@@ -14,7 +14,7 @@ import {
 } from "./store.js";
 import { scheduleReview, previewInterval, GRADES } from "./srs.js";
 import { renderTweet } from "./twitter.js";
-import { postCover, coverLabel, renderCover, readImageFile } from "./cover.js";
+import { postCover, coverLabel, coverSpeechText, renderCover, readImageFile } from "./cover.js";
 import { createCoverForm } from "./cover-form.js";
 import {
   ttsSupported,
@@ -31,7 +31,7 @@ import {
   bootstrapTtsProvider,
 } from "./tts.js";
 import {
-  parseCoverMedia,
+  getCoverMedia,
   playCoverMedia,
   stopCoverMedia,
   isCoverMediaPlaying,
@@ -56,6 +56,7 @@ const addCoverForm = createCoverForm(
     textField: document.getElementById("cover-text-field"),
     imageField: document.getElementById("cover-image-field"),
     textInput: document.getElementById("cover-text-input"),
+    audioUrl: document.getElementById("cover-audio-url"),
     imageUrl: document.getElementById("cover-image-url"),
     imageFile: document.getElementById("cover-image-file"),
     fileName: document.getElementById("cover-file-name"),
@@ -69,6 +70,7 @@ const editCoverForm = createCoverForm(
     textField: document.getElementById("edit-cover-text-field"),
     imageField: document.getElementById("edit-cover-image-field"),
     textInput: document.getElementById("edit-cover-text-input"),
+    audioUrl: document.getElementById("edit-cover-audio-url"),
     imageUrl: document.getElementById("edit-cover-image-url"),
     imageFile: document.getElementById("edit-cover-image-file"),
     fileName: document.getElementById("edit-cover-file-name"),
@@ -344,8 +346,8 @@ function syncTtsControls(cover) {
   }
 
   const textCover = cover?.type === "text";
-  const media = textCover && preferCoverAudioEnabled() ? parseCoverMedia(cover.content) : null;
-  const canPlay = textCover && (media || supported);
+  const media = textCover && preferCoverAudioEnabled() ? getCoverMedia(cover) : null;
+  const canPlay = textCover && (media || (supported && Boolean(coverSpeechText(cover))));
 
   els.coverSpeakBtn?.classList.toggle("hidden", !textCover);
   els.coverSpeakBtn?.classList.toggle("is-speaking", isCoverPlaybackActive());
@@ -410,7 +412,7 @@ function playCover(cover, opts = {}) {
 
   const userInitiated = opts.userInitiated ?? false;
 
-  const media = preferCoverAudioEnabled() ? parseCoverMedia(cover.content) : null;
+  const media = preferCoverAudioEnabled() ? getCoverMedia(cover) : null;
   if (media) {
     void playCoverMedia(media, {
       onEnd: () => syncTtsControls(postCover(currentPost())),
@@ -434,7 +436,15 @@ function playCover(cover, opts = {}) {
     return;
   }
   primeTts();
-  speakText(cover.content, {
+  const speech = coverSpeechText(cover);
+  if (!speech) {
+    if (userInitiated) {
+      alert("No recall prompt to read. Add text or use the audio link field.");
+    }
+    return;
+  }
+
+  speakText(speech, {
     userInitiated,
     onEnd: () => syncTtsControls(postCover(currentPost())),
     onError: (reason) => {
