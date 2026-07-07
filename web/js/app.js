@@ -333,27 +333,35 @@ function syncTtsControls(cover) {
 
 function ttsUnavailableAlert() {
   alert(
-    "Text-to-speech is not available in this browser or view.\n\n" +
-      "Try the Voice dropdown → Google (needs internet), or Browser for local espeak.\n\n" +
-      "Browser mode on Arch: install speech-dispatcher, then\n" +
-      "  systemctl --user enable --now speech-dispatcher",
+    "Text-to-speech is not available here.\n\n" +
+      "Use the web app over http://localhost and pick Voice → Auto or Online.\n" +
+      "For offline speech on Arch, install speech-dispatcher + espeak-ng.",
   );
 }
 
 function ttsErrorAlert(reason) {
   const provider = getTtsProvider();
-  if (provider === "google") {
+  if (provider === "online") {
     alert(
-      `Google voice failed (${reason}).\n\n` +
-        "Check your internet connection and try again, or switch Voice → Browser for local speech.",
+      `Online speech failed (${reason}).\n\n` +
+        "Check your internet connection, or switch Voice → Local for offline espeak.",
+    );
+    return;
+  }
+  if (provider === "auto") {
+    alert(
+      `Speech failed (${reason}).\n\n` +
+        "Auto mode tries online speech first, then local. Check internet, or pick Voice → Local.\n" +
+        "On Arch for local speech: systemctl --user start speech-dispatcher",
     );
     return;
   }
   alert(
-    `Browser speech failed (${reason}).\n\n` +
-      "Try Voice → Google for online speech, or on Arch run:\n" +
-      "  systemctl --user start speech-dispatcher\n" +
-      "  spd-say hello",
+    `Local speech failed (${reason}).\n\n` +
+      "On Arch, run:\n" +
+      "  systemctl --user enable --now speech-dispatcher\n" +
+      "  spd-say hello\n\n" +
+      "Or switch Voice → Auto/Online for clearer online speech.",
   );
 }
 
@@ -565,7 +573,7 @@ function bindEvents() {
   });
 
   els.ttsProvider?.addEventListener("change", () => {
-    setTtsProvider(/** @type {'browser' | 'google'} */ (els.ttsProvider.value));
+    setTtsProvider(/** @type {'auto' | 'online' | 'local'} */ (els.ttsProvider.value));
     stopSpeech();
     syncTtsControls(postCover(currentPost()));
   });

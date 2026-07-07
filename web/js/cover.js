@@ -15,8 +15,9 @@ export function normalizeCover(cover) {
   return { type: c.type, content: c.content.trim() };
 }
 
-/** @param {import('./store.js').TweetPost} post */
+/** @param {import('./store.js').TweetPost | null | undefined} post */
 export function postCover(post) {
+  if (!post) return null;
   if (post.cover) return normalizeCover(post.cover);
   if (post.note?.trim()) return { type: "text", content: post.note.trim() };
   return null;

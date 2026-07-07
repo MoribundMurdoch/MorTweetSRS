@@ -1,7 +1,7 @@
 const AUTO_KEY = "mor_tweet_srs_tts_auto";
 const PROVIDER_KEY = "mor_tweet_srs_tts_provider";
 
-/** @typedef {'browser' | 'google'} TtsProvider */
+/** @typedef {'auto' | 'online' | 'local'} TtsProvider */
 
 /** @type {SpeechSynthesisUtterance | null} */
 let activeUtterance = null;
@@ -10,10 +10,10 @@ let activeUtterance = null;
 let activeAudio = null;
 
 /** @type {boolean} */
-let googleSpeaking = false;
+let onlineSpeaking = false;
 
 /** @type {boolean} */
-let googleStopping = false;
+let onlineStopping = false;
 
 /** @type {Promise<SpeechSynthesisVoice[]> | null} */
 let voicesPromise = null;
@@ -21,7 +21,10 @@ let voicesPromise = null;
 /** @returns {TtsProvider} */
 export function getTtsProvider() {
   const saved = localStorage.getItem(PROVIDER_KEY);
-  return saved === "browser" ? "browser" : "google";
+  if (saved === "local" || saved === "browser") return "local";
+  if (saved === "online" || saved === "google") return "online";
+  if (saved === "auto") return "auto";
+  return "auto";
 }
 
 /** @param {TtsProvider} provider */
@@ -100,10 +103,13 @@ function browserTtsAvailable() {
   return speechApi() !== null && utteranceClass() !== null;
 }
 
+function onlineTtsAvailable() {
+  return typeof Audio !== "undefined" && typeof navigator !== "undefined" && navigator.onLine !== false;
+}
+
 /** @returns {boolean} */
 export function ttsSupported() {
-  if (getTtsProvider() === "google") return true;
-  return browserTtsAvailable();
+  return onlineTtsAvailable() || browserTtsAvailable();
 }
 
 /** @returns {boolean} */
@@ -118,8 +124,8 @@ export function setAutoSpeakEnabled(on) {
 }
 
 export function stopSpeech() {
-  googleStopping = true;
-  googleSpeaking = false;
+  onlineStopping = true;
+  onlineSpeaking = false;
 
   if (activeAudio) {
     activeAudio.pause();
@@ -132,14 +138,14 @@ export function stopSpeech() {
   activeUtterance = null;
 
   window.setTimeout(() => {
-    googleStopping = false;
+    onlineStopping = false;
     if (api?.paused) api.resume();
   }, 0);
 }
 
 /** @returns {boolean} */
 export function isSpeaking() {
-  if (googleSpeaking) return true;
+  if (onlineSpeaking) return true;
   const api = speechApi();
   return Boolean(api && (api.speaking || api.pending));
 }
@@ -169,73 +175,90 @@ function pickVoice(api) {
 /**
  * @param {string} text
  * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
+ * @returns {Promise<boolean>}
  */
 function speakBrowser(text, opts) {
-  const api = speechApi();
-  if (!api || !utteranceClass()) {
-    opts.onError?.("browser-unavailable");
-    return false;
-  }
+  return new Promise((resolve) => {
+    const api = speechApi();
+    if (!api || !utteranceClass()) {
+      opts.onError?.("local-unavailable");
+      resolve(false);
+      return;
+    }
 
-  if (api.speaking || api.pending) api.cancel();
-  primeTts();
+    if (api.speaking || api.pending) api.cancel();
+    primeTts();
 
-  let started = false;
-  const markStarted = () => {
-    started = true;
-    opts.onStart?.();
-  };
-
-  const startUtterance = () => {
-    if (started || api.speaking || api.pending) return;
-
-    const Utterance = utteranceClass();
-    if (!Utterance) return;
-
-    if (api.paused) api.resume();
-
-    const utterance = new Utterance(text);
-    activeUtterance = utterance;
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    const voice = pickVoice(api);
-    if (voice) utterance.voice = voice;
-
-    const finish = () => {
-      if (activeUtterance === utterance) activeUtterance = null;
-      opts.onEnd?.();
+    let started = false;
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
     };
 
-    utterance.onstart = markStarted;
-    utterance.onend = finish;
-    utterance.onerror = (event) => {
-      const reason = event.error ?? "speech-error";
-      if (reason !== "interrupted") {
-        console.warn("MorTweet TTS:", reason);
-        opts.onError?.(reason);
+    const markStarted = () => {
+      started = true;
+      opts.onStart?.();
+    };
+
+    const startUtterance = () => {
+      if (started || settled || api.speaking || api.pending) return;
+
+      const Utterance = utteranceClass();
+      if (!Utterance) return;
+
+      if (api.paused) api.resume();
+
+      const utterance = new Utterance(text);
+      activeUtterance = utterance;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      const voice = pickVoice(api);
+      if (voice) utterance.voice = voice;
+
+      utterance.onstart = markStarted;
+      utterance.onend = () => {
+        if (activeUtterance === utterance) activeUtterance = null;
+        opts.onEnd?.();
+        done(true);
+      };
+      utterance.onerror = (event) => {
+        const reason = event.error ?? "speech-error";
+        if (activeUtterance === utterance) activeUtterance = null;
+        if (reason !== "interrupted") {
+          console.warn("MorTweet TTS:", reason);
+          opts.onError?.(reason);
+        }
+        done(false);
+      };
+
+      api.speak(utterance);
+    };
+
+    startUtterance();
+    window.setTimeout(startUtterance, 300);
+    void ensureVoices().then(startUtterance);
+
+    window.setTimeout(() => {
+      if (!started && !settled) {
+        opts.onError?.("local-timeout");
+        done(false);
       }
-      finish();
-    };
-
-    api.speak(utterance);
-  };
-
-  startUtterance();
-  window.setTimeout(startUtterance, 300);
-  void ensureVoices().then(startUtterance);
-  return true;
+    }, 2500);
+  });
 }
 
 /** @param {string} text */
-function googleTtsUrl(text) {
+function onlineTtsUrl(text) {
   const q = encodeURIComponent(text.slice(0, 200));
   return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${q}&tl=en`;
 }
 
 /** @param {string} text */
-function splitForGoogle(text) {
+function splitForOnline(text) {
   const trimmed = text.trim();
   if (!trimmed) return [];
   if (trimmed.length <= 200) return [trimmed];
@@ -256,9 +279,9 @@ function splitForGoogle(text) {
  * @param {string} chunk
  * @returns {Promise<void>}
  */
-function playGoogleChunk(chunk) {
+function playOnlineChunk(chunk) {
   return new Promise((resolve, reject) => {
-    const audio = new Audio(googleTtsUrl(chunk));
+    const audio = new Audio(onlineTtsUrl(chunk));
     activeAudio = audio;
     audio.onended = () => {
       if (activeAudio === audio) activeAudio = null;
@@ -266,7 +289,7 @@ function playGoogleChunk(chunk) {
     };
     audio.onerror = () => {
       if (activeAudio === audio) activeAudio = null;
-      reject(new Error("google-audio-error"));
+      reject(new Error("online-audio-error"));
     };
     audio.play().catch(reject);
   });
@@ -275,29 +298,52 @@ function playGoogleChunk(chunk) {
 /**
  * @param {string} text
  * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
+ * @returns {Promise<boolean>}
  */
-async function speakGoogle(text, opts) {
-  const chunks = splitForGoogle(text);
+async function speakOnline(text, opts) {
+  const chunks = splitForOnline(text);
   if (!chunks.length) return false;
 
-  googleSpeaking = true;
+  onlineSpeaking = true;
   opts.onStart?.();
 
   try {
     for (const chunk of chunks) {
-      if (googleStopping) break;
-      await playGoogleChunk(chunk);
+      if (onlineStopping) break;
+      await playOnlineChunk(chunk);
     }
-    if (!googleStopping) opts.onEnd?.();
+    if (!onlineStopping) opts.onEnd?.();
+    return !onlineStopping;
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "google-error";
+    const reason = error instanceof Error ? error.message : "online-error";
     console.warn("MorTweet TTS:", reason);
     opts.onError?.(reason);
+    return false;
   } finally {
-    googleSpeaking = false;
+    onlineSpeaking = false;
+  }
+}
+
+/**
+ * @param {string} text
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void }} opts
+ */
+async function speakAuto(text, opts) {
+  if (onlineTtsAvailable()) {
+    const ok = await speakOnline(text, {
+      onStart: opts.onStart,
+      onEnd: opts.onEnd,
+      onError: () => {},
+    });
+    if (ok) return;
   }
 
-  return true;
+  if (browserTtsAvailable()) {
+    const ok = await speakBrowser(text, opts);
+    if (ok) return;
+  }
+
+  opts.onError?.("no-engine");
 }
 
 /**
@@ -311,14 +357,23 @@ export function speakText(text, opts = {}) {
 
   stopSpeech();
 
-  if (getTtsProvider() === "google") {
-    void speakGoogle(trimmed, opts);
+  const mode = getTtsProvider();
+  if (mode === "online") {
+    void speakOnline(trimmed, opts);
+    return true;
+  }
+  if (mode === "local") {
+    void speakBrowser(trimmed, opts);
     return true;
   }
 
-  return speakBrowser(trimmed, opts);
+  void speakAuto(trimmed, opts);
+  return true;
 }
 
 export function ttsProviderLabel() {
-  return getTtsProvider() === "google" ? "Google voice" : "Browser voice";
+  const mode = getTtsProvider();
+  if (mode === "online") return "Online voice";
+  if (mode === "local") return "Local voice";
+  return "Auto voice";
 }
