@@ -392,12 +392,30 @@
   pointer-events: none;
 }
 
+.cover-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
 .cover-panel-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--editor-new);
   font-weight: 600;
+}
+
+.cover-speak-btn.is-speaking {
+  color: var(--editor-new);
+  border-color: color-mix(in srgb, var(--editor-new) 45%, var(--editor-border));
+}
+
+#tts-btn.active {
+  color: var(--editor-new);
+  border-color: color-mix(in srgb, var(--editor-new) 45%, var(--editor-border));
 }
 
 .cover-panel-content {

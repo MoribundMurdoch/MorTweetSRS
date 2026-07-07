@@ -40,6 +40,9 @@
       <span class="header-spacer"></span>
 
       <div class="header-actions">
+        <button class="mor-btn icon-btn" id="tts-btn" title="Toggle cover text-to-speech" aria-label="Toggle cover text-to-speech">
+          <span class="icon" aria-hidden="true">🔊</span>
+        </button>
         <button class="mor-btn icon-btn" id="theme-btn" title="Toggle light/dark" aria-label="Toggle theme">
           <span class="icon" aria-hidden="true">◐</span>
         </button>
@@ -175,7 +178,12 @@
           <div class="card-stack hidden" id="card-stack">
             <div class="flip-card" id="flip-card">
               <div class="cover-panel hidden" id="cover-panel">
-                <div class="cover-panel-label">Recall prompt</div>
+                <div class="cover-panel-top">
+                  <div class="cover-panel-label">Recall prompt</div>
+                  <button type="button" class="mor-btn icon-btn cover-speak-btn hidden" id="cover-speak-btn" title="Read cover aloud" aria-label="Read cover aloud">
+                    <span class="icon" aria-hidden="true">🔊</span>
+                  </button>
+                </div>
                 <div class="cover-panel-content mor-scroll" id="cover-content"></div>
                 <button type="button" class="mor-btn primary reveal-btn" id="reveal-btn">Reveal post</button>
                 <p class="cover-hint">Try to recall the post, then reveal · <kbd>Space</kbd></p>

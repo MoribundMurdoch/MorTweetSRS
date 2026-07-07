@@ -16,6 +16,15 @@ import { scheduleReview, previewInterval, GRADES } from "./srs.js";
 import { renderTweet } from "./twitter.js";
 import { postCover, coverLabel, renderCover, readImageFile } from "./cover.js";
 import { createCoverForm } from "./cover-form.js";
+import {
+  ttsSupported,
+  autoSpeakEnabled,
+  setAutoSpeakEnabled,
+  stopSpeech,
+  speakText,
+  isSpeaking,
+  whenVoicesReady,
+} from "./tts.js";
 
 /** @type {ReturnType<typeof loadCollection>} */
 let collection = loadCollection();
@@ -94,6 +103,8 @@ const els = {
   rightPanel: document.getElementById("right-panel"),
   toggleLeft: document.getElementById("toggle-left"),
   toggleRight: document.getElementById("toggle-right"),
+  ttsBtn: document.getElementById("tts-btn"),
+  coverSpeakBtn: document.getElementById("cover-speak-btn"),
   themeBtn: document.getElementById("theme-btn"),
   exportBtn: document.getElementById("export-btn"),
   importBtn: document.getElementById("import-btn"),
@@ -285,6 +296,38 @@ function renderGradeButtons() {
   });
 }
 
+function syncTtsControls(cover) {
+  const show = ttsSupported();
+  els.ttsBtn?.classList.toggle("hidden", !show);
+  els.ttsBtn?.classList.toggle("active", show && autoSpeakEnabled());
+
+  const textCover = cover?.type === "text";
+  els.coverSpeakBtn?.classList.toggle("hidden", !show || !textCover);
+  els.coverSpeakBtn?.classList.toggle("is-speaking", isSpeaking());
+  if (els.coverSpeakBtn) {
+    const speaking = isSpeaking();
+    els.coverSpeakBtn.title = speaking ? "Stop reading" : "Read cover aloud";
+    els.coverSpeakBtn.setAttribute("aria-label", speaking ? "Stop reading" : "Read cover aloud");
+  }
+}
+
+function speakCover(cover) {
+  if (cover?.type !== "text") return;
+  speakText(cover.content, {
+    onEnd: () => syncTtsControls(postCover(currentPost())),
+  });
+  syncTtsControls(cover);
+}
+
+function maybeAutoSpeakCover(cover) {
+  if (cover?.type !== "text" || !autoSpeakEnabled()) return;
+  whenVoicesReady(() => {
+    const post = currentPost();
+    if (!post || postCover(post)?.content !== cover.content) return;
+    speakCover(cover);
+  });
+}
+
 function replayCardAnimation() {
   if (!els.cardStack) return;
   els.cardStack.style.animation = "none";
@@ -296,6 +339,7 @@ async function revealPost() {
   const post = currentPost();
   if (!post || cardRevealed) return;
 
+  stopSpeech();
   cardRevealed = true;
   els.flipCard?.classList.add("is-revealed");
   els.coverPanel?.classList.add("hidden");
@@ -306,6 +350,7 @@ async function revealPost() {
 }
 
 async function showCurrentCard() {
+  stopSpeech();
   cardRevealed = false;
   els.flipCard?.classList.remove("is-revealed");
   els.tweetFrame.innerHTML = "";
@@ -350,10 +395,13 @@ async function showCurrentCard() {
     els.coverPanel?.classList.remove("hidden");
     els.tweetPanel?.classList.add("is-hidden");
     renderCover(els.coverContent, cover);
+    syncTtsControls(cover);
+    maybeAutoSpeakCover(cover);
     renderGradeButtons();
     return;
   }
 
+  syncTtsControls(null);
   els.coverPanel?.classList.add("hidden");
   els.tweetPanel?.classList.remove("is-hidden");
   cardRevealed = true;
@@ -450,6 +498,28 @@ function bindEvents() {
   });
 
   els.revealBtn?.addEventListener("click", revealPost);
+
+  els.coverSpeakBtn?.addEventListener("click", () => {
+    const cover = postCover(currentPost());
+    if (cover?.type !== "text") return;
+    if (isSpeaking()) {
+      stopSpeech();
+      syncTtsControls(cover);
+    } else {
+      speakCover(cover);
+    }
+  });
+
+  els.ttsBtn?.addEventListener("click", () => {
+    setAutoSpeakEnabled(!autoSpeakEnabled());
+    syncTtsControls(postCover(currentPost()));
+    const cover = postCover(currentPost());
+    if (autoSpeakEnabled() && cover?.type === "text" && !cardRevealed) {
+      maybeAutoSpeakCover(cover);
+    } else {
+      stopSpeech();
+    }
+  });
 
   els.bulkInput.addEventListener("input", () => {
     bulkDirty = true;
@@ -551,5 +621,6 @@ function initTheme() {
 
 addCoverForm.reset();
 initTheme();
+syncTtsControls(null);
 bindEvents();
 startSession();
