@@ -1,5 +1,6 @@
 const AUTO_KEY = "mor_tweet_srs_tts_auto";
 const PROVIDER_KEY = "mor_tweet_srs_tts_provider";
+const PROVIDER_BOOT_KEY = "mor_tweet_srs_tts_provider_boot";
 
 /** @typedef {'auto' | 'online' | 'local'} TtsProvider */
 
@@ -30,6 +31,59 @@ export function getTtsProvider() {
 /** @param {TtsProvider} provider */
 export function setTtsProvider(provider) {
   localStorage.setItem(PROVIDER_KEY, provider);
+}
+
+/** @param {SpeechSynthesisVoice} voice */
+function isPiperVoice(voice) {
+  const name = voice.name.toLowerCase();
+  return name.includes("piper") || name.includes("en_us-amy") || name.includes("en_us-ryan");
+}
+
+/**
+ * @param {SpeechSynthesisVoice[]} voices
+ * @returns {boolean}
+ */
+export function hasPiperVoice(voices) {
+  return voices.some(isPiperVoice);
+}
+
+/**
+ * @param {SpeechSynthesisVoice[]} voices
+ * @returns {SpeechSynthesisVoice | undefined}
+ */
+export function pickVoice(voices) {
+  if (!voices.length) return undefined;
+
+  const english = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
+  const piperAvailable = hasPiperVoice(voices);
+  const pool = english.length ? english : voices;
+  const nonEspeak = piperAvailable ? pool.filter((v) => !v.name.toLowerCase().includes("espeak")) : pool;
+
+  return (
+    nonEspeak.find(isPiperVoice) ??
+    pool.find(isPiperVoice) ??
+    nonEspeak.find((v) => v.default) ??
+    pool.find((v) => v.default) ??
+    nonEspeak.find((v) => v.lang === "en-US" && v.localService) ??
+    pool.find((v) => v.lang === "en-US" && v.localService) ??
+    nonEspeak.find((v) => v.lang === "en-US") ??
+    pool.find((v) => v.lang === "en-US") ??
+    nonEspeak[0] ??
+    pool[0]
+  );
+}
+
+/** Prefer local Piper/speech-dispatcher when the browser exposes it. */
+export async function bootstrapTtsProvider() {
+  if (localStorage.getItem(PROVIDER_BOOT_KEY)) return;
+  const voices = await ensureVoices();
+  if (hasPiperVoice(voices)) {
+    const saved = localStorage.getItem(PROVIDER_KEY);
+    if (!saved || saved === "google" || saved === "online") {
+      setTtsProvider("local");
+    }
+  }
+  localStorage.setItem(PROVIDER_BOOT_KEY, "1");
 }
 
 /** @returns {SpeechSynthesis | null} */
@@ -151,44 +205,22 @@ export function isSpeaking() {
 }
 
 /**
- * @param {SpeechSynthesis} api
- * @returns {SpeechSynthesisVoice | undefined}
- */
-function pickVoice(api) {
-  const voices = api.getVoices();
-  if (!voices.length) return undefined;
-
-  const english = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  const pool = english.length ? english : voices;
-
-  return (
-    pool.find((v) => v.default) ??
-    pool.find((v) => /english.*america/i.test(v.name)) ??
-    pool.find((v) => v.name.includes("espeak") && v.lang.startsWith("en")) ??
-    pool.find((v) => v.lang === "en-US" && v.localService) ??
-    pool.find((v) => v.lang === "en-US") ??
-    pool.find((v) => v.lang.startsWith("en")) ??
-    pool[0]
-  );
-}
-
-/**
  * @param {string} text
  * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
  * @returns {Promise<boolean>}
  */
-function speakBrowser(text, opts) {
+async function speakBrowser(text, opts) {
+  const api = speechApi();
+  if (!api || !utteranceClass()) {
+    opts.onError?.("local-unavailable");
+    return false;
+  }
+
+  const voices = await ensureVoices();
+  if (api.speaking || api.pending) api.cancel();
+  primeTts();
+
   return new Promise((resolve) => {
-    const api = speechApi();
-    if (!api || !utteranceClass()) {
-      opts.onError?.("local-unavailable");
-      resolve(false);
-      return;
-    }
-
-    if (api.speaking || api.pending) api.cancel();
-    primeTts();
-
     let started = false;
     let settled = false;
     const done = (ok) => {
@@ -216,7 +248,7 @@ function speakBrowser(text, opts) {
       utterance.pitch = 1;
       utterance.volume = 1;
 
-      const voice = pickVoice(api);
+      const voice = pickVoice(voices.length ? voices : api.getVoices());
       if (voice) utterance.voice = voice;
 
       utterance.onstart = markStarted;
@@ -240,14 +272,14 @@ function speakBrowser(text, opts) {
 
     startUtterance();
     window.setTimeout(startUtterance, 300);
-    void ensureVoices().then(startUtterance);
+    window.setTimeout(startUtterance, 800);
 
     window.setTimeout(() => {
       if (!started && !settled) {
         opts.onError?.("local-timeout");
         done(false);
       }
-    }, 2500);
+    }, 3500);
   });
 }
 
@@ -329,6 +361,14 @@ async function speakOnline(text, opts) {
  * @param {{ onEnd?: () => void, onError?: (reason: string) => void }} opts
  */
 async function speakAuto(text, opts) {
+  const voices = await ensureVoices();
+  const preferLocal = hasPiperVoice(voices);
+
+  if (preferLocal && browserTtsAvailable()) {
+    const ok = await speakBrowser(text, opts);
+    if (ok) return;
+  }
+
   if (onlineTtsAvailable()) {
     const ok = await speakOnline(text, {
       onStart: opts.onStart,
@@ -371,9 +411,15 @@ export function speakText(text, opts = {}) {
   return true;
 }
 
-export function ttsProviderLabel() {
+export async function ttsProviderLabel() {
   const mode = getTtsProvider();
   if (mode === "online") return "Online voice";
+
+  const voices = await ensureVoices();
+  const piper = pickVoice(voices);
+  if (piper && isPiperVoice(piper)) {
+    return mode === "local" ? "Piper (local)" : "Auto · Piper";
+  }
   if (mode === "local") return "Local voice";
   return "Auto voice";
 }

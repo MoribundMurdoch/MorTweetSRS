@@ -27,6 +27,7 @@ import {
   getTtsProvider,
   setTtsProvider,
   ttsProviderLabel,
+  bootstrapTtsProvider,
 } from "./tts.js";
 import {
   parseCoverMedia,
@@ -331,11 +332,14 @@ function syncTtsControls(cover) {
   }
   if (els.ttsBtn) {
     els.ttsBtn.classList.toggle("active", supported && autoSpeakEnabled());
-    els.ttsBtn.title = supported
-      ? autoSpeakEnabled()
-        ? `Auto-play covers (on) · ${ttsProviderLabel()}`
-        : `Auto-play covers (off) · ${ttsProviderLabel()}`
-      : "Text-to-speech unavailable in this browser";
+    void ttsProviderLabel().then((label) => {
+      if (!els.ttsBtn) return;
+      els.ttsBtn.title = supported
+        ? autoSpeakEnabled()
+          ? `Auto-play covers (on) · ${label}`
+          : `Auto-play covers (off) · ${label}`
+        : "Text-to-speech unavailable in this browser";
+    });
   }
 
   const textCover = cover?.type === "text";
@@ -391,10 +395,10 @@ function ttsErrorAlert(reason) {
   }
   alert(
     `Local speech failed (${reason}).\n\n` +
-      "On Arch, run:\n" +
-      "  systemctl --user enable --now speech-dispatcher\n" +
+      "For Piper on Arch, check:\n" +
+      "  systemctl --user enable --now speech-dispatcher.socket\n" +
       "  spd-say hello\n\n" +
-      "Or switch Voice → Auto/Online for clearer online speech.",
+      "In the app, set Voice → Local. Or use Auto/Online as fallback.",
   );
 }
 
@@ -789,6 +793,8 @@ function initTheme() {
 setYoutubeHost(els.coverYoutubeHost);
 addCoverForm.reset();
 initTheme();
-syncTtsControls(null);
 bindEvents();
-startSession();
+void bootstrapTtsProvider().then(() => {
+  syncTtsControls(null);
+  startSession();
+});
