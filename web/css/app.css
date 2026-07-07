@@ -392,14 +392,6 @@
   pointer-events: none;
 }
 
-.cover-panel-top {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-}
-
 .cover-panel-label {
   font-size: 10px;
   text-transform: uppercase;
@@ -408,9 +400,22 @@
   font-weight: 600;
 }
 
+.cover-speak-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  justify-content: center;
+}
+
 .cover-speak-btn.is-speaking {
   color: var(--editor-new);
   border-color: color-mix(in srgb, var(--editor-new) 45%, var(--editor-border));
+}
+
+.cover-speak-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 #tts-btn.active {

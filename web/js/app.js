@@ -297,22 +297,43 @@ function renderGradeButtons() {
 }
 
 function syncTtsControls(cover) {
-  const show = ttsSupported();
-  els.ttsBtn?.classList.toggle("hidden", !show);
-  els.ttsBtn?.classList.toggle("active", show && autoSpeakEnabled());
+  const supported = ttsSupported();
+  els.ttsBtn?.classList.toggle("active", supported && autoSpeakEnabled());
+  els.ttsBtn?.title = supported
+    ? autoSpeakEnabled()
+      ? "Auto-read text covers (on)"
+      : "Auto-read text covers (off)"
+    : "Text-to-speech unavailable in this browser";
 
   const textCover = cover?.type === "text";
-  els.coverSpeakBtn?.classList.toggle("hidden", !show || !textCover);
+  els.coverSpeakBtn?.classList.toggle("hidden", !textCover);
   els.coverSpeakBtn?.classList.toggle("is-speaking", isSpeaking());
   if (els.coverSpeakBtn) {
     const speaking = isSpeaking();
-    els.coverSpeakBtn.title = speaking ? "Stop reading" : "Read cover aloud";
-    els.coverSpeakBtn.setAttribute("aria-label", speaking ? "Stop reading" : "Read cover aloud");
+    const label = els.coverSpeakBtn.querySelector(".cover-speak-label");
+    if (label) label.textContent = speaking ? "Stop" : "Read aloud";
+    els.coverSpeakBtn.disabled = !supported;
+    els.coverSpeakBtn.title = supported
+      ? speaking
+        ? "Stop reading"
+        : "Read cover text aloud"
+      : "Speech not supported here — try Chrome or Firefox over http://localhost";
   }
+}
+
+function ttsUnavailableAlert() {
+  alert(
+    "Text-to-speech is not available in this browser or view.\n\n" +
+      "Try the web app in Chrome or Firefox (python -m http.server), or install speech-dispatcher on Linux for the desktop app.",
+  );
 }
 
 function speakCover(cover) {
   if (cover?.type !== "text") return;
+  if (!ttsSupported()) {
+    ttsUnavailableAlert();
+    return;
+  }
   speakText(cover.content, {
     onEnd: () => syncTtsControls(postCover(currentPost())),
   });
@@ -511,6 +532,10 @@ function bindEvents() {
   });
 
   els.ttsBtn?.addEventListener("click", () => {
+    if (!ttsSupported()) {
+      ttsUnavailableAlert();
+      return;
+    }
     setAutoSpeakEnabled(!autoSpeakEnabled());
     syncTtsControls(postCover(currentPost()));
     const cover = postCover(currentPost());
