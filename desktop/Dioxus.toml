@@ -1,0 +1,14 @@
+[application]
+name = "MorTweet SRS"
+asset_dir = "assets"
+
+[web.app]
+title = "MorTweet SRS"
+
+[bundle]
+identifier = "com.moribundmurdoch.mortweet-srs"
+publisher = "Moribund Murdoch"
+icon = ["assets/icon.png"]
+category = "Education"
+short_description = "Spaced repetition for saved X posts."
+long_description = "MorTweet SRS reviews a collection of Twitter/X post URLs on a spaced schedule, with optional flip-card covers."

@@ -1,0 +1,66 @@
+/* Slim floating scrollbars — MorBlogger-style, theme-aware */
+
+:root {
+  --scrollbar-size: 8px;
+  --scrollbar-thumb: color-mix(in srgb, var(--editor-muted) 38%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--editor-muted) 58%, transparent);
+  --scrollbar-track: transparent;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.mor-scroll,
+.panel-body,
+.tweet-stage,
+.tweet-frame,
+.post-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.mor-scroll::-webkit-scrollbar,
+.panel-body::-webkit-scrollbar,
+.tweet-stage::-webkit-scrollbar,
+.tweet-frame::-webkit-scrollbar,
+.post-list::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.mor-scroll::-webkit-scrollbar-track,
+.panel-body::-webkit-scrollbar-track,
+.tweet-stage::-webkit-scrollbar-track,
+.tweet-frame::-webkit-scrollbar-track,
+.post-list::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.mor-scroll::-webkit-scrollbar-thumb,
+.panel-body::-webkit-scrollbar-thumb,
+.tweet-stage::-webkit-scrollbar-thumb,
+.tweet-frame::-webkit-scrollbar-thumb,
+.post-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.mor-scroll::-webkit-scrollbar-thumb:hover,
+.panel-body::-webkit-scrollbar-thumb:hover,
+.tweet-stage::-webkit-scrollbar-thumb:hover,
+.tweet-frame::-webkit-scrollbar-thumb:hover,
+.post-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+.mor-scroll::-webkit-scrollbar-corner,
+.panel-body::-webkit-scrollbar-corner,
+.tweet-stage::-webkit-scrollbar-corner,
+.tweet-frame::-webkit-scrollbar-corner {
+  background: transparent;
+}

@@ -1,0 +1,7 @@
+/target/
+/desktop/target/
+**/*.rs.bk
+.DS_Store
+*.swp
+*.log
+/desktop/assets/app/
