@@ -1,5 +1,8 @@
 const AUTO_KEY = "mor_tweet_srs_tts_auto";
 
+/** @type {SpeechSynthesisUtterance | null} */
+let activeUtterance = null;
+
 /** @returns {SpeechSynthesis | null} */
 function speechApi() {
   try {
@@ -25,6 +28,14 @@ function utteranceClass() {
   return null;
 }
 
+/** Wake up speech synthesis (Chrome/Linux often needs this). */
+export function primeTts() {
+  const api = speechApi();
+  if (!api) return;
+  api.getVoices();
+  if (api.paused) api.resume();
+}
+
 /** @returns {boolean} */
 export function ttsSupported() {
   return speechApi() !== null && utteranceClass() !== null;
@@ -42,12 +53,34 @@ export function setAutoSpeakEnabled(on) {
 }
 
 export function stopSpeech() {
-  speechApi()?.cancel();
+  const api = speechApi();
+  if (!api) return;
+  api.cancel();
+  activeUtterance = null;
+  window.setTimeout(() => {
+    if (api.paused) api.resume();
+  }, 0);
 }
 
 /** @returns {boolean} */
 export function isSpeaking() {
-  return Boolean(speechApi()?.speaking);
+  const api = speechApi();
+  return Boolean(api && (api.speaking || api.pending));
+}
+
+/**
+ * @param {SpeechSynthesis} api
+ * @returns {SpeechSynthesisVoice | undefined}
+ */
+function pickVoice(api) {
+  const voices = api.getVoices();
+  if (!voices.length) return undefined;
+  return (
+    voices.find((v) => v.lang === "en-US" && v.localService) ??
+    voices.find((v) => v.lang === "en-US") ??
+    voices.find((v) => v.lang.startsWith("en")) ??
+    voices[0]
+  );
 }
 
 /**
@@ -63,33 +96,37 @@ export function speakText(text, opts = {}) {
   const trimmed = text.trim();
   if (!trimmed) return false;
 
-  stopSpeech();
+  api.cancel();
+  primeTts();
 
   const utterance = new Utterance(trimmed);
-  utterance.rate = 0.95;
+  activeUtterance = utterance;
+  utterance.rate = 1;
   utterance.pitch = 1;
-  const end = () => opts.onEnd?.();
-  utterance.onend = end;
-  utterance.onerror = end;
+  utterance.volume = 1;
 
-  const voices = api.getVoices();
-  const preferred =
-    voices.find((v) => v.lang === "en-US") ??
-    voices.find((v) => v.lang.startsWith("en")) ??
-    voices[0];
-  if (preferred) utterance.voice = preferred;
+  const finish = () => {
+    activeUtterance = null;
+    opts.onEnd?.();
+  };
+  utterance.onend = finish;
+  utterance.onerror = (event) => {
+    console.warn("MorTweet TTS:", event.error ?? "speech error");
+    finish();
+  };
+
+  const voice = pickVoice(api);
+  if (voice) utterance.voice = voice;
 
   api.speak(utterance);
-  return true;
-}
 
-/** @param {() => void} fn */
-export function whenVoicesReady(fn) {
-  const api = speechApi();
-  if (!api) return;
-  if (api.getVoices().length) {
-    fn();
-    return;
-  }
-  api.addEventListener("voiceschanged", fn, { once: true });
+  // Chrome bug: first speak() after load is often swallowed.
+  window.setTimeout(() => {
+    if (!api.speaking && !api.pending && activeUtterance) {
+      primeTts();
+      api.speak(activeUtterance);
+    }
+  }, 120);
+
+  return true;
 }

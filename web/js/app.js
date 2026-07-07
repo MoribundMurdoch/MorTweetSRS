@@ -23,7 +23,7 @@ import {
   stopSpeech,
   speakText,
   isSpeaking,
-  whenVoicesReady,
+  primeTts,
 } from "./tts.js";
 
 /** @type {ReturnType<typeof loadCollection>} */
@@ -342,11 +342,7 @@ function speakCover(cover) {
 
 function maybeAutoSpeakCover(cover) {
   if (cover?.type !== "text" || !autoSpeakEnabled()) return;
-  whenVoicesReady(() => {
-    const post = currentPost();
-    if (!post || postCover(post)?.content !== cover.content) return;
-    speakCover(cover);
-  });
+  speakCover(cover);
 }
 
 function replayCardAnimation() {
@@ -489,6 +485,8 @@ function bindCoverImageUpload(form, fileInput, urlInput) {
 }
 
 function bindEvents() {
+  document.addEventListener("pointerdown", () => primeTts(), { once: true });
+
   bindCoverFormTabs(addCoverForm, '.add-cover-tab[data-cover-form="add"]');
   bindCoverFormTabs(editCoverForm, '.edit-cover-tab[data-cover-form="edit"]');
 
@@ -523,6 +521,7 @@ function bindEvents() {
   els.coverSpeakBtn?.addEventListener("click", () => {
     const cover = postCover(currentPost());
     if (cover?.type !== "text") return;
+    primeTts();
     if (isSpeaking()) {
       stopSpeech();
       syncTtsControls(cover);
@@ -540,7 +539,8 @@ function bindEvents() {
     syncTtsControls(postCover(currentPost()));
     const cover = postCover(currentPost());
     if (autoSpeakEnabled() && cover?.type === "text" && !cardRevealed) {
-      maybeAutoSpeakCover(cover);
+      primeTts();
+      speakCover(cover);
     } else {
       stopSpeech();
     }
