@@ -102,6 +102,26 @@
   gap: 6px;
 }
 
+.tts-provider-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--editor-muted);
+}
+
+.tts-provider-select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: var(--radius-sm);
+  background: var(--editor-panel);
+  color: var(--editor-text);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 /* ── Main grid ─────────────────────────────────────────── */
 
 .editor-main {

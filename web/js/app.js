@@ -24,6 +24,9 @@ import {
   speakText,
   isSpeaking,
   primeTts,
+  getTtsProvider,
+  setTtsProvider,
+  ttsProviderLabel,
 } from "./tts.js";
 import { parseDeckFile } from "./import-deck.js";
 
@@ -104,6 +107,7 @@ const els = {
   rightPanel: document.getElementById("right-panel"),
   toggleLeft: document.getElementById("toggle-left"),
   toggleRight: document.getElementById("toggle-right"),
+  ttsProvider: document.getElementById("tts-provider"),
   ttsBtn: document.getElementById("tts-btn"),
   coverSpeakBtn: document.getElementById("cover-speak-btn"),
   themeBtn: document.getElementById("theme-btn"),
@@ -299,12 +303,15 @@ function renderGradeButtons() {
 
 function syncTtsControls(cover) {
   const supported = ttsSupported();
+  if (els.ttsProvider) {
+    els.ttsProvider.value = getTtsProvider();
+  }
   if (els.ttsBtn) {
     els.ttsBtn.classList.toggle("active", supported && autoSpeakEnabled());
     els.ttsBtn.title = supported
       ? autoSpeakEnabled()
-        ? "Auto-read text covers (on)"
-        : "Auto-read text covers (off)"
+        ? `Auto-read text covers (on) · ${ttsProviderLabel()}`
+        : `Auto-read text covers (off) · ${ttsProviderLabel()}`
       : "Text-to-speech unavailable in this browser";
   }
 
@@ -327,20 +334,26 @@ function syncTtsControls(cover) {
 function ttsUnavailableAlert() {
   alert(
     "Text-to-speech is not available in this browser or view.\n\n" +
-      "On Arch Linux with Chromium, install speech-dispatcher and espeak-ng, then run:\n" +
-      "  systemctl --user enable --now speech-dispatcher\n" +
-      "  spd-say hello\n\n" +
-      "Use the web app over http://localhost (not file://).",
+      "Try the Voice dropdown → Google (needs internet), or Browser for local espeak.\n\n" +
+      "Browser mode on Arch: install speech-dispatcher, then\n" +
+      "  systemctl --user enable --now speech-dispatcher",
   );
 }
 
 function ttsErrorAlert(reason) {
+  const provider = getTtsProvider();
+  if (provider === "google") {
+    alert(
+      `Google voice failed (${reason}).\n\n` +
+        "Check your internet connection and try again, or switch Voice → Browser for local speech.",
+    );
+    return;
+  }
   alert(
-    `Speech failed (${reason}).\n\n` +
-      "On Arch + Chromium, check audio output and run:\n" +
+    `Browser speech failed (${reason}).\n\n` +
+      "Try Voice → Google for online speech, or on Arch run:\n" +
       "  systemctl --user start speech-dispatcher\n" +
-      "  spd-say hello\n\n" +
-      "Then click Read aloud again on a text cover card.",
+      "  spd-say hello",
   );
 }
 
@@ -549,6 +562,12 @@ function bindEvents() {
     } else {
       speakCover(cover);
     }
+  });
+
+  els.ttsProvider?.addEventListener("change", () => {
+    setTtsProvider(/** @type {'browser' | 'google'} */ (els.ttsProvider.value));
+    stopSpeech();
+    syncTtsControls(postCover(currentPost()));
   });
 
   els.ttsBtn?.addEventListener("click", () => {

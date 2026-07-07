@@ -1,10 +1,33 @@
 const AUTO_KEY = "mor_tweet_srs_tts_auto";
+const PROVIDER_KEY = "mor_tweet_srs_tts_provider";
+
+/** @typedef {'browser' | 'google'} TtsProvider */
 
 /** @type {SpeechSynthesisUtterance | null} */
 let activeUtterance = null;
 
+/** @type {HTMLAudioElement | null} */
+let activeAudio = null;
+
+/** @type {boolean} */
+let googleSpeaking = false;
+
+/** @type {boolean} */
+let googleStopping = false;
+
 /** @type {Promise<SpeechSynthesisVoice[]> | null} */
 let voicesPromise = null;
+
+/** @returns {TtsProvider} */
+export function getTtsProvider() {
+  const saved = localStorage.getItem(PROVIDER_KEY);
+  return saved === "browser" ? "browser" : "google";
+}
+
+/** @param {TtsProvider} provider */
+export function setTtsProvider(provider) {
+  localStorage.setItem(PROVIDER_KEY, provider);
+}
 
 /** @returns {SpeechSynthesis | null} */
 function speechApi() {
@@ -73,9 +96,14 @@ export function primeTts() {
   void ensureVoices();
 }
 
+function browserTtsAvailable() {
+  return speechApi() !== null && utteranceClass() !== null;
+}
+
 /** @returns {boolean} */
 export function ttsSupported() {
-  return speechApi() !== null && utteranceClass() !== null;
+  if (getTtsProvider() === "google") return true;
+  return browserTtsAvailable();
 }
 
 /** @returns {boolean} */
@@ -90,17 +118,28 @@ export function setAutoSpeakEnabled(on) {
 }
 
 export function stopSpeech() {
+  googleStopping = true;
+  googleSpeaking = false;
+
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.src = "";
+    activeAudio = null;
+  }
+
   const api = speechApi();
-  if (!api) return;
-  if (api.speaking || api.pending) api.cancel();
+  if (api && (api.speaking || api.pending)) api.cancel();
   activeUtterance = null;
+
   window.setTimeout(() => {
-    if (api.paused) api.resume();
+    googleStopping = false;
+    if (api?.paused) api.resume();
   }, 0);
 }
 
 /** @returns {boolean} */
 export function isSpeaking() {
+  if (googleSpeaking) return true;
   const api = speechApi();
   return Boolean(api && (api.speaking || api.pending));
 }
@@ -128,42 +167,136 @@ function pickVoice(api) {
 }
 
 /**
- * @param {SpeechSynthesis} api
  * @param {string} text
  * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
  */
-function startUtterance(api, text, opts) {
-  const Utterance = utteranceClass();
-  if (!Utterance) return false;
+function speakBrowser(text, opts) {
+  const api = speechApi();
+  if (!api || !utteranceClass()) {
+    opts.onError?.("browser-unavailable");
+    return false;
+  }
 
-  if (api.paused) api.resume();
+  if (api.speaking || api.pending) api.cancel();
+  primeTts();
 
-  const utterance = new Utterance(text);
-  activeUtterance = utterance;
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  const voice = pickVoice(api);
-  if (voice) utterance.voice = voice;
-
-  const finish = () => {
-    if (activeUtterance === utterance) activeUtterance = null;
-    opts.onEnd?.();
+  let started = false;
+  const markStarted = () => {
+    started = true;
+    opts.onStart?.();
   };
 
-  utterance.onstart = () => opts.onStart?.();
-  utterance.onend = finish;
-  utterance.onerror = (event) => {
-    const reason = event.error ?? "speech-error";
-    if (reason !== "interrupted") {
-      console.warn("MorTweet TTS:", reason);
-      opts.onError?.(reason);
+  const startUtterance = () => {
+    if (started || api.speaking || api.pending) return;
+
+    const Utterance = utteranceClass();
+    if (!Utterance) return;
+
+    if (api.paused) api.resume();
+
+    const utterance = new Utterance(text);
+    activeUtterance = utterance;
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    const voice = pickVoice(api);
+    if (voice) utterance.voice = voice;
+
+    const finish = () => {
+      if (activeUtterance === utterance) activeUtterance = null;
+      opts.onEnd?.();
+    };
+
+    utterance.onstart = markStarted;
+    utterance.onend = finish;
+    utterance.onerror = (event) => {
+      const reason = event.error ?? "speech-error";
+      if (reason !== "interrupted") {
+        console.warn("MorTweet TTS:", reason);
+        opts.onError?.(reason);
+      }
+      finish();
+    };
+
+    api.speak(utterance);
+  };
+
+  startUtterance();
+  window.setTimeout(startUtterance, 300);
+  void ensureVoices().then(startUtterance);
+  return true;
+}
+
+/** @param {string} text */
+function googleTtsUrl(text) {
+  const q = encodeURIComponent(text.slice(0, 200));
+  return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${q}&tl=en`;
+}
+
+/** @param {string} text */
+function splitForGoogle(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  if (trimmed.length <= 200) return [trimmed];
+
+  const chunks = [];
+  let rest = trimmed;
+  while (rest.length > 200) {
+    let cut = rest.lastIndexOf(" ", 200);
+    if (cut < 80) cut = 200;
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}
+
+/**
+ * @param {string} chunk
+ * @returns {Promise<void>}
+ */
+function playGoogleChunk(chunk) {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio(googleTtsUrl(chunk));
+    activeAudio = audio;
+    audio.onended = () => {
+      if (activeAudio === audio) activeAudio = null;
+      resolve();
+    };
+    audio.onerror = () => {
+      if (activeAudio === audio) activeAudio = null;
+      reject(new Error("google-audio-error"));
+    };
+    audio.play().catch(reject);
+  });
+}
+
+/**
+ * @param {string} text
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
+ */
+async function speakGoogle(text, opts) {
+  const chunks = splitForGoogle(text);
+  if (!chunks.length) return false;
+
+  googleSpeaking = true;
+  opts.onStart?.();
+
+  try {
+    for (const chunk of chunks) {
+      if (googleStopping) break;
+      await playGoogleChunk(chunk);
     }
-    finish();
-  };
+    if (!googleStopping) opts.onEnd?.();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "google-error";
+    console.warn("MorTweet TTS:", reason);
+    opts.onError?.(reason);
+  } finally {
+    googleSpeaking = false;
+  }
 
-  api.speak(utterance);
   return true;
 }
 
@@ -173,35 +306,19 @@ function startUtterance(api, text, opts) {
  * @returns {boolean}
  */
 export function speakText(text, opts = {}) {
-  const api = speechApi();
-  if (!api || !utteranceClass()) return false;
-
   const trimmed = text.trim();
   if (!trimmed) return false;
 
-  if (api.speaking || api.pending) api.cancel();
-  primeTts();
+  stopSpeech();
 
-  let started = false;
-  const markStarted = () => {
-    started = true;
-  };
+  if (getTtsProvider() === "google") {
+    void speakGoogle(trimmed, opts);
+    return true;
+  }
 
-  const trySpeak = () => {
-    if (started || api.speaking || api.pending) return;
-    startUtterance(api, trimmed, {
-      onStart: markStarted,
-      onEnd: opts.onEnd,
-      onError: opts.onError,
-    });
-  };
+  return speakBrowser(trimmed, opts);
+}
 
-  trySpeak();
-
-  // Chrome/Linux: first speak() after load is often swallowed.
-  window.setTimeout(trySpeak, 300);
-
-  void ensureVoices().then(trySpeak);
-
-  return true;
+export function ttsProviderLabel() {
+  return getTtsProvider() === "google" ? "Google voice" : "Browser voice";
 }
