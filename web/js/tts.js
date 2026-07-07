@@ -22,6 +22,12 @@ let voicesPromise = null;
 /** Chromium blocks speechSynthesis until the user interacts with the page. */
 let userGesturePrimed = false;
 
+/** @type {boolean | null} */
+let spdApiAvailable = null;
+
+/** @type {Promise<boolean> | null} */
+let spdApiCheckPromise = null;
+
 export function markTtsUserGesture() {
   userGesturePrimed = true;
 }
@@ -88,11 +94,18 @@ export function pickVoice(voices) {
 /** Prefer local Piper/speech-dispatcher when the browser exposes it. */
 export async function bootstrapTtsProvider() {
   if (localStorage.getItem(PROVIDER_BOOT_KEY)) return;
-  const voices = await ensureVoices();
-  if (hasPiperVoice(voices)) {
+  if (await checkSpdApi()) {
     const saved = localStorage.getItem(PROVIDER_KEY);
     if (!saved || saved === "google" || saved === "online") {
       setTtsProvider("local");
+    }
+  } else {
+    const voices = await ensureVoices();
+    if (hasPiperVoice(voices)) {
+      const saved = localStorage.getItem(PROVIDER_KEY);
+      if (!saved || saved === "google" || saved === "online") {
+        setTtsProvider("local");
+      }
     }
   }
   localStorage.setItem(PROVIDER_BOOT_KEY, "1");
@@ -189,9 +202,57 @@ export function setAutoSpeakEnabled(on) {
   localStorage.setItem(AUTO_KEY, on ? "true" : "false");
 }
 
+async function checkSpdApi() {
+  if (spdApiAvailable !== null) return spdApiAvailable;
+  if (!spdApiCheckPromise) {
+    spdApiCheckPromise = fetch("/api/local-tts/capabilities")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        spdApiAvailable = Boolean(data?.available);
+        return spdApiAvailable;
+      })
+      .catch(() => {
+        spdApiAvailable = false;
+        return false;
+      });
+  }
+  return spdApiCheckPromise;
+}
+
+function cancelSpdApi() {
+  if (!spdApiAvailable) return;
+  void fetch("/api/local-tts/cancel", { method: "POST" }).catch(() => {});
+}
+
+/**
+ * @param {string} text
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
+ * @returns {Promise<boolean>}
+ */
+async function speakSpdApi(text, opts) {
+  try {
+    opts.onStart?.();
+    const response = await fetch("/api/local-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (response.ok) {
+      opts.onEnd?.();
+      return true;
+    }
+    console.warn("MorTweet TTS: spd-api", response.status);
+  } catch (error) {
+    console.warn("MorTweet TTS: spd-api", error);
+  }
+  return false;
+}
+
 export function stopSpeech() {
   onlineStopping = true;
   onlineSpeaking = false;
+
+  cancelSpdApi();
 
   if (activeAudio) {
     activeAudio.pause();
@@ -214,6 +275,46 @@ export function isSpeaking() {
   if (onlineSpeaking) return true;
   const api = speechApi();
   return Boolean(api && (api.speaking || api.pending));
+}
+
+/**
+ * @param {string} text
+ * @param {SpeechSynthesisVoice[]} voices
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void }} opts
+ * @returns {boolean}
+ */
+function speakBrowserNow(text, voices, opts) {
+  const api = speechApi();
+  const Utterance = utteranceClass();
+  if (!api || !Utterance) return false;
+
+  if (api.paused) api.resume();
+
+  const utterance = new Utterance(text);
+  activeUtterance = utterance;
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  const voice = pickVoice(voices.length ? voices : api.getVoices());
+  if (voice) utterance.voice = voice;
+
+  utterance.onstart = () => opts.onStart?.();
+  utterance.onend = () => {
+    if (activeUtterance === utterance) activeUtterance = null;
+    opts.onEnd?.();
+  };
+  utterance.onerror = (event) => {
+    const reason = event.error ?? "speech-error";
+    if (activeUtterance === utterance) activeUtterance = null;
+    if (reason !== "interrupted") {
+      console.warn("MorTweet TTS:", reason);
+      opts.onError?.(reason);
+    }
+  };
+
+  api.speak(utterance);
+  return true;
 }
 
 /**
@@ -248,38 +349,18 @@ async function speakBrowser(text, opts) {
 
     const startUtterance = () => {
       if (started || settled || api.speaking || api.pending) return;
-
-      const Utterance = utteranceClass();
-      if (!Utterance) return;
-
-      if (api.paused) api.resume();
-
-      const utterance = new Utterance(text);
-      activeUtterance = utterance;
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-
-      const voice = pickVoice(voices.length ? voices : api.getVoices());
-      if (voice) utterance.voice = voice;
-
-      utterance.onstart = markStarted;
-      utterance.onend = () => {
-        if (activeUtterance === utterance) activeUtterance = null;
-        opts.onEnd?.();
-        done(true);
+      const wrapped = {
+        onStart: markStarted,
+        onEnd: () => {
+          opts.onEnd?.();
+          done(true);
+        },
+        onError: (reason) => {
+          if (reason !== "interrupted") opts.onError?.(reason);
+          done(false);
+        },
       };
-      utterance.onerror = (event) => {
-        const reason = event.error ?? "speech-error";
-        if (activeUtterance === utterance) activeUtterance = null;
-        if (reason !== "interrupted") {
-          console.warn("MorTweet TTS:", reason);
-          opts.onError?.(reason);
-        }
-        done(false);
-      };
-
-      api.speak(utterance);
+      if (!speakBrowserNow(text, voices, wrapped)) return;
     };
 
     startUtterance();
@@ -376,7 +457,18 @@ async function speakLocal(text, opts) {
   const userInitiated = opts.userInitiated ?? false;
   const canUseBrowser = browserTtsAvailable() && (userInitiated || userGesturePrimed);
 
+  if (await checkSpdApi()) {
+    const ok = await speakSpdApi(text, opts);
+    if (ok) return;
+  }
+
   if (canUseBrowser) {
+    const api = speechApi();
+    const voices = api?.getVoices() ?? [];
+    if (api && speakBrowserNow(text, voices, { ...opts, onError: () => {} })) {
+      return;
+    }
+
     const ok = await speakBrowser(text, {
       onStart: opts.onStart,
       onEnd: opts.onEnd,
@@ -406,6 +498,11 @@ async function speakAuto(text, opts) {
   const voices = await ensureVoices();
   const preferLocal = hasPiperVoice(voices);
   const canUseBrowser = browserTtsAvailable() && (userInitiated || userGesturePrimed);
+
+  if (await checkSpdApi()) {
+    const ok = await speakSpdApi(text, opts);
+    if (ok) return;
+  }
 
   if (preferLocal && canUseBrowser) {
     const ok = await speakBrowser(text, {
@@ -465,6 +562,10 @@ export function speakText(text, opts = {}) {
 export async function ttsProviderLabel() {
   const mode = getTtsProvider();
   if (mode === "online") return "Online voice";
+
+  if (await checkSpdApi()) {
+    return mode === "local" ? "Piper (spd-say)" : "Auto · Piper";
+  }
 
   const voices = await ensureVoices();
   const piper = pickVoice(voices);

@@ -396,10 +396,12 @@ function ttsErrorAlert(reason) {
   }
   alert(
     `Local speech failed (${reason}).\n\n` +
-      "For Piper on Arch, check:\n" +
+      "For Piper on Arch, run the app with:\n" +
+      "  python serve.py\n" +
+      "not plain http.server — that enables spd-say TTS.\n\n" +
+      "Also check:\n" +
       "  systemctl --user enable --now speech-dispatcher.socket\n" +
-      "  spd-say hello\n\n" +
-      "In the app, set Voice → Local. Or use Auto/Online as fallback.",
+      "  spd-say hello",
   );
 }
 
