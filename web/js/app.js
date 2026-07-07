@@ -582,18 +582,43 @@ function bindEvents() {
     URL.revokeObjectURL(a.href);
   });
 
-  els.importBtn.addEventListener("click", () => els.importFile.click());
+  // Clear before the native picker opens so the same deck file can be chosen again.
+  els.importBtn?.addEventListener("mousedown", () => {
+    if (els.importFile) els.importFile.value = "";
+  });
 
-  els.importFile.addEventListener("change", async () => {
+  els.importFile?.addEventListener("change", async () => {
     const file = els.importFile.files?.[0];
     if (!file) return;
-    const text = await file.text();
+
+    if (
+      collection.posts.length > 0 &&
+      !confirm(`Import "${file.name}"? This replaces your current collection (${collection.posts.length} posts).`)
+    ) {
+      els.importFile.value = "";
+      return;
+    }
+
+    let text;
+    try {
+      text = await file.text();
+    } catch {
+      alert("Could not read the file.");
+      els.importFile.value = "";
+      return;
+    }
+
     const result = importJson(text);
     if (!result.ok) {
       alert(result.error);
+      els.importFile.value = "";
       return;
     }
+
     collection = result.collection;
+    bulkDirty = false;
+    editingPostId = null;
+    closeEditCover();
     els.importFile.value = "";
     startSession();
   });

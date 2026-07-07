@@ -46,9 +46,14 @@
         <button class="mor-btn icon-btn" id="theme-btn" title="Toggle light/dark" aria-label="Toggle theme">
           <span class="icon" aria-hidden="true">◐</span>
         </button>
-        <button class="mor-btn" id="export-btn">Export</button>
-        <button class="mor-btn" id="import-btn">Import</button>
-        <input type="file" id="import-file" accept="application/json,.json" class="hidden" />
+        <button type="button" class="mor-btn" id="export-btn">Export</button>
+        <label class="mor-btn import-btn" id="import-btn" for="import-file">Import</label>
+        <input
+          type="file"
+          id="import-file"
+          accept="application/json,.json,text/json"
+          class="file-input-hidden"
+        />
       </div>
     </header>
 
@@ -223,6 +228,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=2"></script>
+  <script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>

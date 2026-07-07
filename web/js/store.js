@@ -303,18 +303,56 @@ export function exportJson(collection) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {TweetPost | null}
+ */
+function normalizeImportedPost(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const p = /** @type {TweetPost} */ (raw);
+  const url = typeof p.url === "string" ? normalizeTweetUrl(p.url) ?? p.url.trim() : null;
+  if (!url) return null;
+
+  const srs = p.srs && typeof p.srs === "object" ? p.srs : newSrsState();
+  const base = {
+    id: typeof p.id === "string" && p.id ? p.id : tweetIdFromUrl(url),
+    url,
+    addedAt: typeof p.addedAt === "string" ? p.addedAt : new Date().toISOString(),
+    srs: {
+      state: srs.state === "learning" || srs.state === "review" ? srs.state : srs.state === "new" ? "new" : "new",
+      learningStep: Number.isFinite(srs.learningStep) ? srs.learningStep : 0,
+      ease: Number.isFinite(srs.ease) ? srs.ease : 2.5,
+      intervalDays: Number.isFinite(srs.intervalDays) ? srs.intervalDays : 0,
+      reps: Number.isFinite(srs.reps) ? srs.reps : 0,
+      lapses: Number.isFinite(srs.lapses) ? srs.lapses : 0,
+      due: typeof srs.due === "string" ? srs.due : new Date().toISOString(),
+    },
+  };
+
+  return normalizePost({ ...p, ...base });
+}
+
+/**
  * @param {string} json
  * @returns {{ ok: true, collection: Collection } | { ok: false, error: string }}
  */
 export function importJson(json) {
   try {
     const data = JSON.parse(json);
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: "Invalid file: expected a JSON object." };
+    }
     if (!Array.isArray(data.posts)) {
       return { ok: false, error: "Invalid file: missing posts array." };
     }
+
+    const posts = data.posts.map(normalizeImportedPost).filter(Boolean);
+    if (!posts.length && data.posts.length > 0) {
+      return { ok: false, error: "No valid posts found — each entry needs a Twitter/X URL." };
+    }
+
     const collection = {
-      name: data.name ?? "Imported",
-      posts: data.posts.map(normalizePost),
+      name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : "Imported",
+      posts,
       reviews: Array.isArray(data.reviews) ? data.reviews : [],
     };
     saveCollection(collection);
