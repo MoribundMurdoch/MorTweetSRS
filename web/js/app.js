@@ -327,7 +327,20 @@ function syncTtsControls(cover) {
 function ttsUnavailableAlert() {
   alert(
     "Text-to-speech is not available in this browser or view.\n\n" +
-      "Try the web app in Chrome or Firefox (python -m http.server), or install speech-dispatcher on Linux for the desktop app.",
+      "On Arch Linux with Chromium, install speech-dispatcher and espeak-ng, then run:\n" +
+      "  systemctl --user enable --now speech-dispatcher\n" +
+      "  spd-say hello\n\n" +
+      "Use the web app over http://localhost (not file://).",
+  );
+}
+
+function ttsErrorAlert(reason) {
+  alert(
+    `Speech failed (${reason}).\n\n` +
+      "On Arch + Chromium, check audio output and run:\n" +
+      "  systemctl --user start speech-dispatcher\n" +
+      "  spd-say hello\n\n" +
+      "Then click Read aloud again on a text cover card.",
   );
 }
 
@@ -337,8 +350,13 @@ function speakCover(cover) {
     ttsUnavailableAlert();
     return;
   }
+  primeTts();
   speakText(cover.content, {
     onEnd: () => syncTtsControls(postCover(currentPost())),
+    onError: (reason) => {
+      if (reason !== "interrupted") ttsErrorAlert(reason);
+      syncTtsControls(cover);
+    },
   });
   syncTtsControls(cover);
 }
@@ -488,7 +506,7 @@ function bindCoverImageUpload(form, fileInput, urlInput) {
 }
 
 function bindEvents() {
-  document.addEventListener("pointerdown", () => primeTts(), { once: true });
+  document.addEventListener("pointerdown", () => primeTts(), { passive: true });
 
   bindCoverFormTabs(addCoverForm, '.add-cover-tab[data-cover-form="add"]');
   bindCoverFormTabs(editCoverForm, '.edit-cover-tab[data-cover-form="edit"]');
