@@ -19,6 +19,18 @@ let onlineStopping = false;
 /** @type {Promise<SpeechSynthesisVoice[]> | null} */
 let voicesPromise = null;
 
+/** Chromium blocks speechSynthesis until the user interacts with the page. */
+let userGesturePrimed = false;
+
+export function markTtsUserGesture() {
+  userGesturePrimed = true;
+}
+
+/** @returns {boolean} */
+export function hasTtsUserGesture() {
+  return userGesturePrimed;
+}
+
 /** @returns {TtsProvider} */
 export function getTtsProvider() {
   const saved = localStorage.getItem(PROVIDER_KEY);
@@ -279,7 +291,7 @@ async function speakBrowser(text, opts) {
         opts.onError?.("local-timeout");
         done(false);
       }
-    }, 3500);
+    }, 6000);
   });
 }
 
@@ -358,14 +370,18 @@ async function speakOnline(text, opts) {
 
 /**
  * @param {string} text
- * @param {{ onEnd?: () => void, onError?: (reason: string) => void }} opts
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void, userInitiated?: boolean }} opts
  */
-async function speakAuto(text, opts) {
-  const voices = await ensureVoices();
-  const preferLocal = hasPiperVoice(voices);
+async function speakLocal(text, opts) {
+  const userInitiated = opts.userInitiated ?? false;
+  const canUseBrowser = browserTtsAvailable() && (userInitiated || userGesturePrimed);
 
-  if (preferLocal && browserTtsAvailable()) {
-    const ok = await speakBrowser(text, opts);
+  if (canUseBrowser) {
+    const ok = await speakBrowser(text, {
+      onStart: opts.onStart,
+      onEnd: opts.onEnd,
+      onError: () => {},
+    });
     if (ok) return;
   }
 
@@ -378,17 +394,52 @@ async function speakAuto(text, opts) {
     if (ok) return;
   }
 
-  if (browserTtsAvailable()) {
-    const ok = await speakBrowser(text, opts);
-    if (ok) return;
-  }
-
-  opts.onError?.("no-engine");
+  if (userInitiated) opts.onError?.(canUseBrowser ? "local-failed" : "local-no-gesture");
 }
 
 /**
  * @param {string} text
- * @param {{ onEnd?: () => void, onError?: (reason: string) => void }} [opts]
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void, userInitiated?: boolean }} opts
+ */
+async function speakAuto(text, opts) {
+  const userInitiated = opts.userInitiated ?? false;
+  const voices = await ensureVoices();
+  const preferLocal = hasPiperVoice(voices);
+  const canUseBrowser = browserTtsAvailable() && (userInitiated || userGesturePrimed);
+
+  if (preferLocal && canUseBrowser) {
+    const ok = await speakBrowser(text, {
+      onStart: opts.onStart,
+      onEnd: opts.onEnd,
+      onError: () => {},
+    });
+    if (ok) return;
+  }
+
+  if (onlineTtsAvailable()) {
+    const ok = await speakOnline(text, {
+      onStart: opts.onStart,
+      onEnd: opts.onEnd,
+      onError: () => {},
+    });
+    if (ok) return;
+  }
+
+  if (canUseBrowser) {
+    const ok = await speakBrowser(text, {
+      onStart: opts.onStart,
+      onEnd: opts.onEnd,
+      onError: () => {},
+    });
+    if (ok) return;
+  }
+
+  if (userInitiated) opts.onError?.("no-engine");
+}
+
+/**
+ * @param {string} text
+ * @param {{ onEnd?: () => void, onError?: (reason: string) => void, onStart?: () => void, userInitiated?: boolean }} [opts]
  * @returns {boolean}
  */
 export function speakText(text, opts = {}) {
@@ -403,7 +454,7 @@ export function speakText(text, opts = {}) {
     return true;
   }
   if (mode === "local") {
-    void speakBrowser(trimmed, opts);
+    void speakLocal(trimmed, opts);
     return true;
   }
 

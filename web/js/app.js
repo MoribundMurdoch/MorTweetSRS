@@ -24,6 +24,7 @@ import {
   speakText,
   isSpeaking,
   primeTts,
+  markTtsUserGesture,
   getTtsProvider,
   setTtsProvider,
   ttsProviderLabel,
@@ -388,8 +389,8 @@ function ttsErrorAlert(reason) {
   if (provider === "auto") {
     alert(
       `Speech failed (${reason}).\n\n` +
-        "Auto mode tries online speech first, then local. Check internet, or pick Voice → Local.\n" +
-        "On Arch for local speech: systemctl --user start speech-dispatcher",
+        "Auto mode tries Piper/local first, then online. Check internet, or pick Voice → Online.\n" +
+        "For Piper on Arch: systemctl --user enable --now speech-dispatcher.socket && spd-say hello",
     );
     return;
   }
@@ -402,19 +403,23 @@ function ttsErrorAlert(reason) {
   );
 }
 
-function playCover(cover) {
+function playCover(cover, opts = {}) {
   if (cover?.type !== "text") return;
+
+  const userInitiated = opts.userInitiated ?? false;
 
   const media = preferCoverAudioEnabled() ? parseCoverMedia(cover.content) : null;
   if (media) {
     void playCoverMedia(media, {
       onEnd: () => syncTtsControls(postCover(currentPost())),
       onError: (reason) => {
-        alert(
-          media.type === "youtube"
-            ? `Could not play YouTube audio (${reason}). Check the link or your connection.`
-            : `Could not play audio link (${reason}). Check the URL is a direct .mp3/.wav file.`,
-        );
+        if (userInitiated) {
+          alert(
+            media.type === "youtube"
+              ? `Could not play YouTube audio (${reason}). Check the link or your connection.`
+              : `Could not play audio link (${reason}). Check the URL is a direct .mp3/.wav file.`,
+          );
+        }
         syncTtsControls(cover);
       },
     });
@@ -423,14 +428,15 @@ function playCover(cover) {
   }
 
   if (!ttsSupported()) {
-    ttsUnavailableAlert();
+    if (userInitiated) ttsUnavailableAlert();
     return;
   }
   primeTts();
   speakText(cover.content, {
+    userInitiated,
     onEnd: () => syncTtsControls(postCover(currentPost())),
     onError: (reason) => {
-      if (reason !== "interrupted") ttsErrorAlert(reason);
+      if (reason !== "interrupted" && userInitiated) ttsErrorAlert(reason);
       syncTtsControls(cover);
     },
   });
@@ -439,7 +445,7 @@ function playCover(cover) {
 
 function maybeAutoSpeakCover(cover) {
   if (cover?.type !== "text" || !autoSpeakEnabled()) return;
-  playCover(cover);
+  playCover(cover, { userInitiated: false });
 }
 
 function replayCardAnimation() {
@@ -582,7 +588,14 @@ function bindCoverImageUpload(form, fileInput, urlInput) {
 }
 
 function bindEvents() {
-  document.addEventListener("pointerdown", () => primeTts(), { passive: true });
+  document.addEventListener(
+    "pointerdown",
+    () => {
+      primeTts();
+      markTtsUserGesture();
+    },
+    { passive: true },
+  );
 
   bindCoverFormTabs(addCoverForm, '.add-cover-tab[data-cover-form="add"]');
   bindCoverFormTabs(editCoverForm, '.edit-cover-tab[data-cover-form="edit"]');
@@ -622,7 +635,7 @@ function bindEvents() {
       stopCoverPlayback();
       syncTtsControls(cover);
     } else {
-      playCover(cover);
+      playCover(cover, { userInitiated: true });
     }
   });
 
@@ -646,7 +659,7 @@ function bindEvents() {
     syncTtsControls(postCover(currentPost()));
     const cover = postCover(currentPost());
     if (autoSpeakEnabled() && cover?.type === "text" && !cardRevealed) {
-      playCover(cover);
+      playCover(cover, { userInitiated: true });
     } else {
       stopCoverPlayback();
     }
