@@ -159,6 +159,14 @@ export function removePost(collection, postId) {
   saveCollection(collection);
 }
 
+/** @param {Collection} collection @param {string} [name] */
+export function startNewDeck(collection, name = "My deck") {
+  collection.name = name.trim() || "My deck";
+  collection.posts = [];
+  collection.reviews = [];
+  saveCollection(collection);
+}
+
 /** Reset SRS progress for every post; keeps URLs, covers, and the collection name. */
 export function resetCollectionProgress(collection) {
   const now = new Date();

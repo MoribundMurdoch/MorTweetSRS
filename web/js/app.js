@@ -12,6 +12,7 @@ import {
   importJson,
   postStatus,
   resetCollectionProgress,
+  startNewDeck,
 } from "./store.js";
 import { scheduleReview, previewInterval, GRADES } from "./srs.js";
 import { renderTweet } from "./twitter.js";
@@ -234,6 +235,44 @@ function applyLoadedDeck(nextCollection, deckName) {
 function openDeckLibrary() {
   setPanel("left", true);
   document.getElementById("deck-library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function openNewDeckSection() {
+  setPanel("left", true);
+  const nameInput = document.getElementById("new-deck-name");
+  if (nameInput && !nameInput.value.trim() && collection.name) {
+    nameInput.value = collection.name === "My Tweets" ? "" : collection.name;
+  }
+  document.getElementById("new-deck-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  nameInput?.focus();
+}
+
+function handleStartNewDeck() {
+  const nameInput = document.getElementById("new-deck-name");
+  const name = nameInput?.value?.trim() || "My deck";
+  const count = collection.posts.length;
+
+  if (count > 0) {
+    if (
+      !confirm(
+        `Start a new deck called "${name}"?\n\n` +
+          `Your current deck (${count} card${count === 1 ? "" : "s"}) will be cleared from this device. ` +
+          "Download it first if you want to keep a copy.",
+      )
+    ) {
+      return;
+    }
+  }
+
+  startNewDeck(collection, name);
+  if (nameInput) nameInput.value = name;
+  bulkDirty = false;
+  els.bulkInput.value = "";
+  editingPostId = null;
+  closeEditCover();
+  startSession();
+  setPanel("left", true);
+  els.urlInput?.focus();
 }
 
 function escapeHtml(text) {
@@ -915,10 +954,11 @@ function bindEvents() {
   document.getElementById("mobile-nav-library")?.addEventListener("click", openDeckLibrary);
   document.getElementById("empty-library-btn")?.addEventListener("click", openDeckLibrary);
   document.getElementById("empty-load-file-btn")?.addEventListener("click", () => els.importFile?.click());
+  document.getElementById("empty-new-deck-btn")?.addEventListener("click", openNewDeckSection);
+  document.getElementById("new-deck-btn")?.addEventListener("click", handleStartNewDeck);
 
-  document.getElementById("empty-collection-btn")?.addEventListener("click", () => {
-    setPanel("left", true);
-    document.getElementById("url-input")?.focus();
+  document.getElementById("new-deck-name")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleStartNewDeck();
   });
 
   document.getElementById("panel-backdrop")?.addEventListener("click", () => {
@@ -1012,15 +1052,6 @@ function bindEvents() {
       return;
     }
     resetCollectionProgress(collection);
-    startSession();
-  });
-
-  document.getElementById("clear-collection")?.addEventListener("click", () => {
-    if (!confirm("Delete this deck? All cards and study progress will be removed.")) return;
-    collection = { name: collection.name, posts: [], reviews: [] };
-    saveCollection(collection);
-    bulkDirty = false;
-    els.bulkInput.value = "";
     startSession();
   });
 

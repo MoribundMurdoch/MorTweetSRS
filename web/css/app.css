@@ -1159,6 +1159,12 @@ a.mor-btn:hover {
   min-width: 0;
 }
 
+.new-deck-section .mor-btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+}
+
 /* ── Post list ─────────────────────────────────────────── */
 
 .post-list {
