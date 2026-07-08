@@ -117,10 +117,10 @@ export function tweetIdFromUrl(url) {
  */
 export function addPost(collection, rawUrl, cover = null) {
   const url = normalizeTweetUrl(rawUrl);
-  if (!url) return { ok: false, error: "Paste a valid Twitter/X post URL." };
+  if (!url) return { ok: false, error: "Paste a valid X post URL." };
 
   if (collection.posts.some((p) => p.url === url)) {
-    return { ok: false, error: "That post is already in your collection." };
+    return { ok: false, error: "That post is already in your deck." };
   }
 
   const post = {
@@ -351,15 +351,15 @@ export function importJson(json) {
   try {
     const data = JSON.parse(json);
     if (!data || typeof data !== "object") {
-      return { ok: false, error: "Invalid file: expected a JSON object." };
+      return { ok: false, error: "This file is not a valid deck." };
     }
     if (!Array.isArray(data.posts)) {
-      return { ok: false, error: "Invalid file: missing posts array." };
+      return { ok: false, error: "This deck file is missing its cards." };
     }
 
     const posts = data.posts.map(normalizeImportedPost).filter(Boolean);
     if (!posts.length && data.posts.length > 0) {
-      return { ok: false, error: "No valid posts found — each entry needs a Twitter/X URL." };
+      return { ok: false, error: "No valid cards found — each entry needs an X post URL." };
     }
 
     const collection = {
@@ -370,6 +370,6 @@ export function importJson(json) {
     saveCollection(collection);
     return { ok: true, collection };
   } catch {
-    return { ok: false, error: "Could not parse JSON." };
+    return { ok: false, error: "Could not read this deck file." };
   }
 }

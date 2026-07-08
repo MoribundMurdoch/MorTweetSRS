@@ -41,6 +41,11 @@ import {
   setYoutubeHost,
 } from "./cover-audio.js";
 import { parseDeckFile } from "./import-deck.js";
+import {
+  DECK_LIBRARY_REPO_URL,
+  fetchDeckCatalog,
+  fetchDeckText,
+} from "./deck-library.js";
 
 /** @type {ReturnType<typeof loadCollection>} */
 let collection = loadCollection();
@@ -132,6 +137,8 @@ const els = {
   importBtn: document.getElementById("import-btn"),
   importFile: document.getElementById("import-file"),
   studyAgainBtn: document.getElementById("study-again-btn"),
+  deckNameLabel: document.getElementById("deck-name-label"),
+  deckLibraryList: document.getElementById("deck-library-list"),
 };
 
 function currentPost() {
@@ -148,9 +155,13 @@ function refreshStats() {
   els.newCount.textContent = String(s.new);
   els.doneCount.textContent = String(s.reviewedToday);
   if (els.collectionCount) els.collectionCount.textContent = String(s.total);
+  if (els.deckNameLabel) {
+    els.deckNameLabel.textContent = collection.name?.trim() || "Your deck";
+    els.deckNameLabel.title = collection.name?.trim() || "Your deck";
+  }
 
   els.statsPanel.innerHTML = `
-    <div class="stat-card wide"><div class="stat-label">Total posts</div><div class="stat-value">${s.total}</div></div>
+    <div class="stat-card wide"><div class="stat-label">Total cards</div><div class="stat-value">${s.total}</div></div>
     <div class="stat-card accent"><div class="stat-label">Due</div><div class="stat-value">${s.due}</div></div>
     <div class="stat-card new"><div class="stat-label">New</div><div class="stat-value">${s.new}</div></div>
     <div class="stat-card"><div class="stat-label">Later</div><div class="stat-value">${s.later}</div></div>
@@ -182,6 +193,151 @@ function updateSessionBar() {
 function syncBulkTextarea() {
   if (bulkDirty) return;
   els.bulkInput.value = collection.posts.map((p) => p.url).join("\n");
+}
+
+function deckFilename() {
+  const slug =
+    collection.name
+      ?.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "deck";
+  return `${slug}.json`;
+}
+
+function confirmReplaceDeck(deckName, incomingCount) {
+  const current = collection.posts.length;
+  if (current === 0) return true;
+  const incomingLabel =
+    typeof incomingCount === "number" && incomingCount > 0
+      ? `${incomingCount} card${incomingCount === 1 ? "" : "s"}`
+      : "this deck";
+  return confirm(
+    `Load "${deckName}" (${incomingLabel})?\n\n` +
+      `This replaces your current deck (${current} card${current === 1 ? "" : "s"}). ` +
+      "Download your deck first if you want to keep a copy.",
+  );
+}
+
+function applyLoadedDeck(nextCollection, deckName) {
+  collection = nextCollection;
+  bulkDirty = false;
+  editingPostId = null;
+  closeEditCover();
+  if (isOverlayLayout()) setPanel("left", false);
+  startSession();
+  alert(
+    `Loaded "${deckName}" — ${collection.posts.length} card${collection.posts.length === 1 ? "" : "s"} ready to study.`,
+  );
+}
+
+function openDeckLibrary() {
+  setPanel("left", true);
+  document.getElementById("deck-library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderDeckLibrary(decks) {
+  if (!els.deckLibraryList) return;
+
+  if (!decks.length) {
+    els.deckLibraryList.innerHTML =
+      `<p class="deck-library-status">No decks in the library yet. <a href="${DECK_LIBRARY_REPO_URL}" target="_blank" rel="noopener noreferrer">Browse on GitHub</a>.</p>`;
+    return;
+  }
+
+  els.deckLibraryList.innerHTML = `<ul class="deck-library-items">${decks
+    .map((deck) => {
+      const countLabel = deck.posts ? `${deck.posts} card${deck.posts === 1 ? "" : "s"}` : "Deck";
+      const tags = Array.isArray(deck.tags) && deck.tags.length ? deck.tags.join(", ") : "";
+      const meta = tags ? `${countLabel} · ${tags}` : countLabel;
+      return `
+        <li class="deck-library-item">
+          <div class="deck-library-info">
+            <div class="deck-library-name">${escapeHtml(deck.name)}</div>
+            <div class="deck-library-meta">${escapeHtml(meta)}</div>
+            ${deck.description ? `<p class="deck-library-desc">${escapeHtml(deck.description)}</p>` : ""}
+          </div>
+          <button
+            type="button"
+            class="mor-btn primary deck-load-btn"
+            data-deck-id="${escapeHtml(deck.id)}"
+            data-deck-file="${escapeHtml(deck.file)}"
+            data-deck-name="${escapeHtml(deck.name)}"
+            data-deck-posts="${deck.posts ?? ""}"
+          >Load deck</button>
+        </li>
+      `;
+    })
+    .join("")}</ul>`;
+
+  els.deckLibraryList.querySelectorAll(".deck-load-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      void loadDeckFromLibrary({
+        id: btn.dataset.deckId,
+        name: btn.dataset.deckName,
+        file: btn.dataset.deckFile,
+        posts: Number(btn.dataset.deckPosts) || undefined,
+      }, btn);
+    });
+  });
+}
+
+function renderDeckLibraryError(message) {
+  if (!els.deckLibraryList) return;
+  els.deckLibraryList.innerHTML = `
+    <p class="deck-library-status deck-library-error">${message}</p>
+    <div class="mor-btn-row">
+      <button type="button" class="mor-btn" id="deck-library-retry">Try again</button>
+      <a class="mor-btn ghost" href="${DECK_LIBRARY_REPO_URL}" target="_blank" rel="noopener noreferrer">Open on GitHub</a>
+    </div>
+  `;
+  document.getElementById("deck-library-retry")?.addEventListener("click", () => {
+    void initDeckLibrary();
+  });
+}
+
+async function loadDeckFromLibrary(deck, button) {
+  const deckName = deck.name || "Deck";
+  if (!confirmReplaceDeck(deckName, deck.posts)) return;
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Loading…";
+
+  try {
+    const json = await fetchDeckText(deck.file);
+    const result = importJson(json);
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
+    applyLoadedDeck(result.collection, result.collection.name?.trim() || deckName);
+  } catch {
+    alert("Could not load that deck. Check your connection and try again.");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function initDeckLibrary() {
+  if (!els.deckLibraryList) return;
+  els.deckLibraryList.innerHTML = `<p class="deck-library-status">Loading decks…</p>`;
+
+  try {
+    const decks = await fetchDeckCatalog();
+    renderDeckLibrary(decks);
+  } catch {
+    renderDeckLibraryError("Could not load the deck library.");
+  }
 }
 
 function deletePost(postId) {
@@ -249,7 +405,7 @@ function renderPostList() {
           </div>
           <div class="post-actions">
             <button class="post-edit-btn" type="button" title="Edit cover" aria-label="Edit cover" data-edit="${post.id}">✎</button>
-            <button class="post-remove-btn" type="button" title="Remove post" aria-label="Remove post" data-remove="${post.id}">×</button>
+            <button class="post-remove-btn" type="button" title="Remove card" aria-label="Remove card" data-remove="${post.id}">×</button>
           </div>
         </li>
       `;
@@ -296,8 +452,8 @@ function renderGradeButtons() {
   els.gradeBar.classList.toggle("hidden", !post);
   if (els.gradeBar.querySelector(".grade-prompt")) {
     els.gradeBar.querySelector(".grade-prompt").textContent = needsReveal
-      ? "Reveal the post before rating"
-      : "How well did you recall this?";
+      ? "Reveal the post before you rate it"
+      : "How well did you remember it?";
   }
 
   els.gradeButtons.innerHTML = GRADES.map((g) => {
@@ -733,7 +889,7 @@ function bindEvents() {
     const result = syncCollectionFromBulk(collection, els.bulkInput.value);
     bulkDirty = false;
     if (result.added === 0 && result.removed === 0 && result.invalid > 0) {
-      alert("No valid URLs in the list. Check your links and try again.");
+      alert("No valid X post URLs found. Check your links and try again.");
       syncBulkTextarea();
       return;
     }
@@ -755,12 +911,14 @@ function bindEvents() {
     els.importFile?.click();
   });
 
-  document.getElementById("empty-import-btn")?.addEventListener("click", () => {
-    els.importFile?.click();
-  });
+  document.getElementById("open-library-btn")?.addEventListener("click", openDeckLibrary);
+  document.getElementById("mobile-nav-library")?.addEventListener("click", openDeckLibrary);
+  document.getElementById("empty-library-btn")?.addEventListener("click", openDeckLibrary);
+  document.getElementById("empty-load-file-btn")?.addEventListener("click", () => els.importFile?.click());
 
   document.getElementById("empty-collection-btn")?.addEventListener("click", () => {
     setPanel("left", true);
+    document.getElementById("url-input")?.focus();
   });
 
   document.getElementById("panel-backdrop")?.addEventListener("click", () => {
@@ -778,33 +936,26 @@ function bindEvents() {
     }
   });
 
-  function exportCollection() {
+  function downloadDeck() {
     const blob = new Blob([exportJson(collection)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "mor-tweet-srs-collection.json";
+    a.download = deckFilename();
     a.click();
     URL.revokeObjectURL(a.href);
   }
 
-  els.exportBtn.addEventListener("click", exportCollection);
-  document.getElementById("export-panel-btn")?.addEventListener("click", exportCollection);
+  els.exportBtn.addEventListener("click", downloadDeck);
+  document.getElementById("share-deck-btn")?.addEventListener("click", downloadDeck);
 
   async function handleImportFile(file) {
     if (!file) return;
-
-    if (
-      collection.posts.length > 0 &&
-      !confirm(`Import "${file.name}"? This replaces your current collection (${collection.posts.length} posts).`)
-    ) {
-      return;
-    }
 
     let result;
     try {
       result = await parseDeckFile(file);
     } catch {
-      alert("Could not read the file.");
+      alert("Could not read that file.");
       return;
     }
 
@@ -813,12 +964,9 @@ function bindEvents() {
       return;
     }
 
-    collection = result.collection;
-    bulkDirty = false;
-    editingPostId = null;
-    closeEditCover();
-    startSession();
-    alert(`Imported ${result.count} post${result.count === 1 ? "" : "s"} from ${file.name}.`);
+    const deckName = result.collection.name?.trim() || file.name.replace(/\.json$/i, "");
+    if (!confirmReplaceDeck(deckName, result.count)) return;
+    applyLoadedDeck(result.collection, deckName);
   }
 
   const onImportInput = async () => {
@@ -838,12 +986,9 @@ function bindEvents() {
       alert(result.error);
       return;
     }
-    collection = result.collection;
-    bulkDirty = false;
-    editingPostId = null;
-    closeEditCover();
-    startSession();
-    alert(`Imported ${result.collection.posts.length} posts.`);
+    const deckName = result.collection.name?.trim() || "Deck";
+    if (!confirmReplaceDeck(deckName, result.collection.posts.length)) return;
+    applyLoadedDeck(result.collection, deckName);
   });
 
   els.studyAgainBtn.addEventListener("click", startSession);
@@ -851,7 +996,7 @@ function bindEvents() {
   els.cardDeleteBtn.addEventListener("click", () => {
     const post = currentPost();
     if (!post) return;
-    if (!confirm("Remove this post from your collection?")) return;
+    if (!confirm("Remove this card from your deck?")) return;
     deletePost(post.id);
   });
 
@@ -860,8 +1005,8 @@ function bindEvents() {
     if (!count) return;
     if (
       !confirm(
-        `Reset study progress for all ${count} post${count === 1 ? "" : "s"}?\n\n` +
-          "SRS schedules and review history will be cleared. Your posts and covers are kept.",
+        `Reset study progress for all ${count} card${count === 1 ? "" : "s"}?\n\n` +
+          "Schedules and review history will be cleared. Your cards and recall covers are kept.",
       )
     ) {
       return;
@@ -871,7 +1016,7 @@ function bindEvents() {
   });
 
   document.getElementById("clear-collection")?.addEventListener("click", () => {
-    if (!confirm("Remove all posts and review history?")) return;
+    if (!confirm("Delete this deck? All cards and study progress will be removed.")) return;
     collection = { name: collection.name, posts: [], reviews: [] };
     saveCollection(collection);
     bulkDirty = false;
@@ -916,3 +1061,4 @@ void bootstrapTtsProvider().then(() => {
   syncTtsControls(null);
   startSession();
 });
+void initDeckLibrary();
