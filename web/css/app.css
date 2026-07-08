@@ -807,6 +807,20 @@
   font-size: 13px;
 }
 
+.empty-state-extra {
+  margin-top: 12px !important;
+}
+
+.empty-state-extra a {
+  color: var(--editor-accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.empty-state-extra a:hover {
+  text-decoration: underline;
+}
+
 .completion-card .mor-btn {
   margin-top: 18px;
 }
@@ -982,7 +996,8 @@
   resize: vertical;
 }
 
-.mor-btn {
+.mor-btn,
+a.mor-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -997,6 +1012,11 @@
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
+  text-decoration: none;
+}
+
+a.mor-btn:hover {
+  color: var(--editor-text);
 }
 
 .mor-btn:hover {

@@ -57,6 +57,18 @@
         <button class="mor-btn icon-btn" id="theme-btn" title="Toggle light/dark" aria-label="Toggle theme">
           <span class="icon" aria-hidden="true">◐</span>
         </button>
+        <a
+          class="mor-btn header-compact-btn"
+          id="browse-decks-btn"
+          href="https://github.com/MoribundMurdoch/MorTweetSRS-Decks"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Browse shared study sets on GitHub"
+          aria-label="Browse shared study sets"
+        >
+          <span class="header-compact-icon" aria-hidden="true">⊞</span>
+          <span class="header-compact-label">Decks</span>
+        </a>
         <button type="button" class="mor-btn header-compact-btn" id="export-btn" title="Export collection" aria-label="Export collection">
           <span class="header-compact-icon" aria-hidden="true">↓</span>
           <span class="header-compact-label">Export</span>
@@ -196,6 +208,7 @@
             <div class="state-icon" aria-hidden="true">◎</div>
             <h2>No posts yet</h2>
             <p>Add X post URLs in the collection panel. Each becomes a review card on a spaced schedule.</p>
+            <p class="empty-state-extra">Or <a href="https://github.com/MoribundMurdoch/MorTweetSRS-Decks" target="_blank" rel="noopener noreferrer">browse shared decks</a> and import a study set.</p>
           </div>
 
           <div class="completion-card hidden" id="completion-state">
@@ -254,6 +267,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=15"></script>
+  <script type="module" src="js/app.js?v=16"></script>
 </body>
 </html>
