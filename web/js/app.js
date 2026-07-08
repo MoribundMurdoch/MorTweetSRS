@@ -583,6 +583,13 @@ function syncPanelBackdrop() {
   backdrop.setAttribute("aria-hidden", anyOpen ? "false" : "true");
 }
 
+function syncMobileNav() {
+  const nav = document.getElementById("mobile-bottom-nav");
+  if (!nav || !isOverlayLayout()) return;
+  nav.querySelector('[data-panel="left"]')?.classList.toggle("active", leftOpen);
+  nav.querySelector('[data-panel="right"]')?.classList.toggle("active", rightOpen);
+}
+
 function setPanel(side, open, opts = {}) {
   if (isOverlayLayout() && open && !opts.skipExclusion) {
     if (side === "left" && rightOpen) setPanel("right", false, { skipExclusion: true });
@@ -600,6 +607,7 @@ function setPanel(side, open, opts = {}) {
   }
 
   syncPanelBackdrop();
+  syncMobileNav();
 }
 
 function initResponsiveLayout() {
@@ -735,6 +743,26 @@ function bindEvents() {
   els.toggleLeft.addEventListener("click", () => setPanel("left", !leftOpen));
   els.toggleRight.addEventListener("click", () => setPanel("right", !rightOpen));
 
+  document.getElementById("mobile-nav-collection")?.addEventListener("click", () => {
+    setPanel("left", !leftOpen);
+  });
+
+  document.getElementById("mobile-nav-stats")?.addEventListener("click", () => {
+    setPanel("right", !rightOpen);
+  });
+
+  document.getElementById("mobile-nav-import")?.addEventListener("click", () => {
+    els.importFile?.click();
+  });
+
+  document.getElementById("empty-import-btn")?.addEventListener("click", () => {
+    els.importFile?.click();
+  });
+
+  document.getElementById("empty-collection-btn")?.addEventListener("click", () => {
+    setPanel("left", true);
+  });
+
   document.getElementById("panel-backdrop")?.addEventListener("click", () => {
     if (!isOverlayLayout()) return;
     setPanel("left", false);
@@ -750,14 +778,17 @@ function bindEvents() {
     }
   });
 
-  els.exportBtn.addEventListener("click", () => {
+  function exportCollection() {
     const blob = new Blob([exportJson(collection)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "mor-tweet-srs-collection.json";
     a.click();
     URL.revokeObjectURL(a.href);
-  });
+  }
+
+  els.exportBtn.addEventListener("click", exportCollection);
+  document.getElementById("export-panel-btn")?.addEventListener("click", exportCollection);
 
   async function handleImportFile(file) {
     if (!file) return;

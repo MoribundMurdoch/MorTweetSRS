@@ -145,6 +145,7 @@
             <textarea class="mor-textarea bulk-list" id="bulk-input" placeholder="https://x.com/…&#10;https://twitter.com/…"></textarea>
             <div class="mor-btn-row">
               <button class="mor-btn" id="bulk-btn">Apply list</button>
+              <button type="button" class="mor-btn panel-export-btn" id="export-panel-btn">Export</button>
               <button class="mor-btn ghost" id="reset-progress" title="Start over with the same posts and covers">Reset progress</button>
               <button class="mor-btn danger ghost" id="clear-collection">Clear all</button>
             </div>
@@ -207,8 +208,17 @@
           <div class="empty-state" id="empty-state">
             <div class="state-icon" aria-hidden="true">◎</div>
             <h2>No posts yet</h2>
-            <p>Add X post URLs in the collection panel. Each becomes a review card on a spaced schedule.</p>
-            <p class="empty-state-extra">Or <a href="https://github.com/MoribundMurdoch/MorTweetSRS-Decks" target="_blank" rel="noopener noreferrer">browse shared decks</a> and import a study set.</p>
+            <p class="empty-state-lead">Import a shared deck or add X post URLs to start reviewing on a spaced schedule.</p>
+            <div class="empty-state-actions">
+              <button type="button" class="mor-btn primary" id="empty-import-btn">Import a deck</button>
+              <a
+                class="mor-btn"
+                href="https://github.com/MoribundMurdoch/MorTweetSRS-Decks"
+                target="_blank"
+                rel="noopener noreferrer"
+              >Browse decks</a>
+              <button type="button" class="mor-btn ghost" id="empty-collection-btn">Add posts</button>
+            </div>
           </div>
 
           <div class="completion-card hidden" id="completion-state">
@@ -265,8 +275,34 @@
         </button>
       </nav>
     </div>
+
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile navigation">
+      <button type="button" class="mobile-nav-btn" data-panel="left" id="mobile-nav-collection" aria-label="Collection">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span>Collection</span>
+      </button>
+      <button type="button" class="mobile-nav-btn" id="mobile-nav-import" aria-label="Import deck">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></svg>
+        <span>Import</span>
+      </button>
+      <a
+        class="mobile-nav-btn"
+        href="https://github.com/MoribundMurdoch/MorTweetSRS-Decks"
+        target="_blank"
+        rel="noopener noreferrer"
+        id="mobile-nav-decks"
+        aria-label="Browse decks"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Decks</span>
+      </a>
+      <button type="button" class="mobile-nav-btn" data-panel="right" id="mobile-nav-stats" aria-label="Stats">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-6"/><path d="M22 20v-9"/></svg>
+        <span>Stats</span>
+      </button>
+    </nav>
   </div>
 
-  <script type="module" src="js/app.js?v=16"></script>
+  <script type="module" src="js/app.js?v=17"></script>
 </body>
 </html>
