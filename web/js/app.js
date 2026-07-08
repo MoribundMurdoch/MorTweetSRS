@@ -11,6 +11,7 @@ import {
   exportJson,
   importJson,
   postStatus,
+  resetCollectionProgress,
 } from "./store.js";
 import { scheduleReview, previewInterval, GRADES } from "./srs.js";
 import { renderTweet } from "./twitter.js";
@@ -776,6 +777,21 @@ function bindEvents() {
     if (!post) return;
     if (!confirm("Remove this post from your collection?")) return;
     deletePost(post.id);
+  });
+
+  document.getElementById("reset-progress")?.addEventListener("click", () => {
+    const count = collection.posts.length;
+    if (!count) return;
+    if (
+      !confirm(
+        `Reset study progress for all ${count} post${count === 1 ? "" : "s"}?\n\n` +
+          "SRS schedules and review history will be cleared. Your posts and covers are kept.",
+      )
+    ) {
+      return;
+    }
+    resetCollectionProgress(collection);
+    startSession();
   });
 
   document.getElementById("clear-collection")?.addEventListener("click", () => {

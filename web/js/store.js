@@ -159,6 +159,16 @@ export function removePost(collection, postId) {
   saveCollection(collection);
 }
 
+/** Reset SRS progress for every post; keeps URLs, covers, and the collection name. */
+export function resetCollectionProgress(collection) {
+  const now = new Date();
+  for (const post of collection.posts) {
+    post.srs = newSrsState(now);
+  }
+  collection.reviews = [];
+  saveCollection(collection);
+}
+
 /** @param {string} text */
 export function urlsFromBulkText(text) {
   return text.split("\n").map((l) => l.trim()).filter(Boolean);
