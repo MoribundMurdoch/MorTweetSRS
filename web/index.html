@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>MorTweet SRS</title>
   <link rel="icon" href="assets/logo.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -57,8 +57,14 @@
         <button class="mor-btn icon-btn" id="theme-btn" title="Toggle light/dark" aria-label="Toggle theme">
           <span class="icon" aria-hidden="true">◐</span>
         </button>
-        <button type="button" class="mor-btn" id="export-btn">Export</button>
-        <label class="mor-btn import-btn" id="import-btn" for="import-file">Import</label>
+        <button type="button" class="mor-btn header-compact-btn" id="export-btn" title="Export collection" aria-label="Export collection">
+          <span class="header-compact-icon" aria-hidden="true">↓</span>
+          <span class="header-compact-label">Export</span>
+        </button>
+        <label class="mor-btn import-btn header-compact-btn" id="import-btn" for="import-file" title="Import collection" aria-label="Import collection">
+          <span class="header-compact-icon" aria-hidden="true">↑</span>
+          <span class="header-compact-label">Import</span>
+        </label>
         <input
           type="file"
           id="import-file"
@@ -69,6 +75,7 @@
     </header>
 
     <div class="editor-main">
+      <div class="panel-backdrop hidden" id="panel-backdrop" aria-hidden="true"></div>
       <nav class="mor-quick-launch-bar launch-bar-left" aria-label="Left panel">
         <button class="launch-btn active" id="toggle-left" title="Collection panel" aria-label="Toggle collection panel">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -247,6 +254,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=14"></script>
+  <script type="module" src="js/app.js?v=15"></script>
 </body>
 </html>

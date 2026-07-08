@@ -46,6 +46,7 @@ import { parseDeckFile } from "./import-deck.js";
 let collection = loadCollection();
 let queue = [];
 let queueIndex = 0;
+const OVERLAY_LAYOUT_MQ = "(max-width: 1024px)";
 let leftOpen = true;
 let rightOpen = true;
 let bulkDirty = false;
@@ -263,6 +264,7 @@ function renderPostList() {
       if (idx >= 0) {
         queueIndex = idx;
         showCurrentCard();
+        if (isOverlayLayout()) setPanel("left", false);
       }
     });
   });
@@ -566,7 +568,27 @@ function startSession() {
   showCurrentCard();
 }
 
-function setPanel(side, open) {
+function isOverlayLayout() {
+  return window.matchMedia(OVERLAY_LAYOUT_MQ).matches;
+}
+
+function syncPanelBackdrop() {
+  const backdrop = document.getElementById("panel-backdrop");
+  const overlay = isOverlayLayout();
+  const anyOpen = overlay && (leftOpen || rightOpen);
+  document.body.classList.toggle("panel-open", anyOpen);
+  if (!backdrop) return;
+  backdrop.classList.toggle("hidden", !anyOpen);
+  backdrop.classList.toggle("visible", anyOpen);
+  backdrop.setAttribute("aria-hidden", anyOpen ? "false" : "true");
+}
+
+function setPanel(side, open, opts = {}) {
+  if (isOverlayLayout() && open && !opts.skipExclusion) {
+    if (side === "left" && rightOpen) setPanel("right", false, { skipExclusion: true });
+    if (side === "right" && leftOpen) setPanel("left", false, { skipExclusion: true });
+  }
+
   if (side === "left") {
     leftOpen = open;
     els.leftPanel.classList.toggle("collapsed", !open);
@@ -576,6 +598,23 @@ function setPanel(side, open) {
     els.rightPanel.classList.toggle("collapsed", !open);
     els.toggleRight.classList.toggle("active", open);
   }
+
+  syncPanelBackdrop();
+}
+
+function initResponsiveLayout() {
+  const mq = window.matchMedia(OVERLAY_LAYOUT_MQ);
+  const apply = () => {
+    if (mq.matches) {
+      setPanel("left", false, { skipExclusion: true });
+      setPanel("right", false, { skipExclusion: true });
+    } else {
+      setPanel("left", true, { skipExclusion: true });
+      setPanel("right", true, { skipExclusion: true });
+    }
+  };
+  mq.addEventListener("change", apply);
+  apply();
 }
 
 function bindCoverFormTabs(form, selector) {
@@ -695,6 +734,12 @@ function bindEvents() {
 
   els.toggleLeft.addEventListener("click", () => setPanel("left", !leftOpen));
   els.toggleRight.addEventListener("click", () => setPanel("right", !rightOpen));
+
+  document.getElementById("panel-backdrop")?.addEventListener("click", () => {
+    if (!isOverlayLayout()) return;
+    setPanel("left", false);
+    setPanel("right", false);
+  });
 
   els.themeBtn.addEventListener("click", () => {
     const isLight = document.documentElement.dataset.theme === "light";
@@ -835,6 +880,7 @@ setYoutubeHost(els.coverYoutubeHost);
 addCoverForm.reset();
 initTheme();
 bindEvents();
+initResponsiveLayout();
 void bootstrapTtsProvider().then(() => {
   syncTtsControls(null);
   startSession();
