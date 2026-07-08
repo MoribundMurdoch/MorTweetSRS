@@ -247,6 +247,20 @@
   overflow-y: auto;
   padding: 14px;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-body.deck-loaded .add-card-section {
+  order: -20;
+}
+
+.panel-body.deck-loaded .cards-in-deck-section {
+  order: -10;
+}
+
+.panel-body.deck-loaded #edit-cover-section:not(.hidden) {
+  order: -15;
 }
 
 .panel-section {

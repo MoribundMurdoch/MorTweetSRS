@@ -161,6 +161,8 @@ function refreshStats() {
     els.deckNameLabel.title = collection.name?.trim() || "Your deck";
   }
 
+  document.getElementById("deck-panel-body")?.classList.toggle("deck-loaded", s.total > 0);
+
   els.statsPanel.innerHTML = `
     <div class="stat-card wide"><div class="stat-label">Total cards</div><div class="stat-value">${s.total}</div></div>
     <div class="stat-card accent"><div class="stat-label">Due</div><div class="stat-value">${s.due}</div></div>
