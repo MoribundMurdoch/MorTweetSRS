@@ -342,16 +342,19 @@ export function exportJson(collection) {
 function normalizeImportedPost(raw) {
   if (!raw || typeof raw !== "object") return null;
   const p = /** @type {TweetPost} */ (raw);
-  const url = typeof p.url === "string" ? normalizeTweetUrl(p.url) ?? p.url.trim() : null;
+  // Strict: only real X/Twitter status URLs (no bare fallback).
+  const url = typeof p.url === "string" ? normalizeTweetUrl(p.url) : null;
   if (!url) return null;
 
   const srs = p.srs && typeof p.srs === "object" ? p.srs : newSrsState();
+  const statusId = tweetIdFromUrl(url);
   const base = {
-    id: typeof p.id === "string" && p.id ? p.id : tweetIdFromUrl(url),
+    // Prefer status id so export → import → merge match the same card.
+    id: statusId || (typeof p.id === "string" && p.id ? p.id : crypto.randomUUID()),
     url,
     addedAt: typeof p.addedAt === "string" ? p.addedAt : new Date().toISOString(),
     srs: {
-      state: srs.state === "learning" || srs.state === "review" ? srs.state : srs.state === "new" ? "new" : "new",
+      state: srs.state === "learning" || srs.state === "review" ? srs.state : "new",
       learningStep: Number.isFinite(srs.learningStep) ? srs.learningStep : 0,
       ease: Number.isFinite(srs.ease) ? srs.ease : 2.5,
       intervalDays: Number.isFinite(srs.intervalDays) ? srs.intervalDays : 0,
@@ -366,6 +369,7 @@ function normalizeImportedPost(raw) {
 
 /**
  * Parse a deck JSON string without writing localStorage.
+ * Dedupes by URL/id and drops orphan reviews.
  * @param {string} json
  * @returns {{ ok: true, collection: Collection } | { ok: false, error: string }}
  */
@@ -379,17 +383,59 @@ export function parseDeckJson(json) {
       return { ok: false, error: "This deck file is missing its cards." };
     }
 
-    const posts = data.posts.map(normalizeImportedPost).filter(Boolean);
+    /** @type {TweetPost[]} */
+    const posts = [];
+    const seenUrl = new Set();
+    const seenId = new Set();
+    /** @type {Map<string, string>} old file ids → normalized status ids */
+    const idRemap = new Map();
+
+    for (const raw of data.posts) {
+      const post = normalizeImportedPost(raw);
+      if (!post) continue;
+      const oldId =
+        raw && typeof raw === "object" && typeof /** @type {{ id?: string }} */ (raw).id === "string"
+          ? /** @type {{ id?: string }} */ (raw).id
+          : "";
+
+      if (seenUrl.has(post.url) || seenId.has(post.id)) {
+        // Map duplicate file ids onto the card we kept so reviews still attach.
+        const kept = posts.find((p) => p.url === post.url || p.id === post.id);
+        if (oldId && kept) idRemap.set(oldId, kept.id);
+        continue;
+      }
+
+      seenUrl.add(post.url);
+      seenId.add(post.id);
+      posts.push(post);
+      if (oldId && oldId !== post.id) idRemap.set(oldId, post.id);
+    }
+
     if (!posts.length && data.posts.length > 0) {
       return { ok: false, error: "No valid cards found — each entry needs an X post URL." };
     }
+
+    const postIds = new Set(posts.map((p) => p.id));
+    const reviews = Array.isArray(data.reviews)
+      ? data.reviews
+          .map((r) => {
+            if (!r || typeof r !== "object") return null;
+            const rawId = typeof r.postId === "string" ? r.postId : "";
+            const postId = idRemap.get(rawId) ?? rawId;
+            if (!postIds.has(postId) || !Number.isFinite(r.grade) || typeof r.at !== "string") {
+              return null;
+            }
+            return { postId, grade: r.grade, at: r.at };
+          })
+          .filter(Boolean)
+      : [];
 
     return {
       ok: true,
       collection: {
         name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : "Imported",
         posts,
-        reviews: Array.isArray(data.reviews) ? data.reviews : [],
+        reviews,
       },
     };
   } catch {
