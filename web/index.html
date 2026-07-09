@@ -14,6 +14,102 @@
 </head>
 <body>
   <div class="editor-shell">
+    <nav class="mor-menu-bar" id="app-menu-bar" aria-label="Application menu">
+      <div class="mor-menu-item app-menu-brand" title="MorTweet SRS">
+        <img class="menu-brand-mark" src="assets/logo.png" width="20" height="20" alt="" aria-hidden="true" />
+        <div class="mor-menu-dropdown" role="menu">
+          <button type="button" class="mor-menu-item" data-action="about" role="menuitem">About MorTweet SRS</button>
+        </div>
+      </div>
+
+      <div class="mor-menu-item" data-menu="file">
+        File
+        <div class="mor-menu-dropdown" role="menu">
+          <button type="button" class="mor-menu-item" data-action="new-deck" role="menuitem">
+            <span>New deck…</span>
+            <span class="shortcut">Ctrl+N</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="clear-deck" role="menuitem">
+            <span>Clear current deck</span>
+          </button>
+          <div class="mor-menu-divider" role="separator"></div>
+          <button type="button" class="mor-menu-item" data-action="load-replace" role="menuitem">
+            <span>Load deck (replace)…</span>
+            <span class="shortcut">Ctrl+O</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="load-merge" role="menuitem">
+            <span>Load deck (merge)…</span>
+            <span class="shortcut">Ctrl+Shift+O</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="open-library" role="menuitem">
+            <span>Browse deck library…</span>
+          </button>
+          <div class="mor-menu-divider" role="separator"></div>
+          <button type="button" class="mor-menu-item" data-action="download" role="menuitem">
+            <span>Download deck…</span>
+            <span class="shortcut">Ctrl+S</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mor-menu-item" data-menu="deck">
+        Deck
+        <div class="mor-menu-dropdown" role="menu">
+          <button type="button" class="mor-menu-item" data-action="rename-deck" role="menuitem">
+            <span>Rename deck…</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="reset-progress" role="menuitem">
+            <span>Reset study progress…</span>
+          </button>
+          <div class="mor-menu-divider" role="separator"></div>
+          <button type="button" class="mor-menu-item" data-action="study-again" role="menuitem">
+            <span>Refresh due cards</span>
+            <span class="shortcut">R</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="focus-add" role="menuitem">
+            <span>Add card…</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mor-menu-item" data-menu="view">
+        View
+        <div class="mor-menu-dropdown" role="menu">
+          <button type="button" class="mor-menu-item" data-action="toggle-left" role="menuitem">
+            <span>Your deck panel</span>
+            <span class="shortcut" id="menu-check-left">✓</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="toggle-right" role="menuitem">
+            <span>Stats panel</span>
+            <span class="shortcut" id="menu-check-right">✓</span>
+          </button>
+          <div class="mor-menu-divider" role="separator"></div>
+          <button type="button" class="mor-menu-item" data-action="toggle-theme" role="menuitem">
+            <span>Toggle light / dark</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mor-menu-item" data-menu="help">
+        Help
+        <div class="mor-menu-dropdown" role="menu">
+          <button type="button" class="mor-menu-item" data-action="shortcuts" role="menuitem">
+            <span>Keyboard shortcuts</span>
+          </button>
+          <button type="button" class="mor-menu-item" data-action="github-library" role="menuitem">
+            <span>Deck library on GitHub</span>
+          </button>
+          <div class="mor-menu-divider" role="separator"></div>
+          <button type="button" class="mor-menu-item" data-action="about" role="menuitem">
+            <span>About</span>
+          </button>
+        </div>
+      </div>
+
+      <span class="menu-bar-spacer"></span>
+      <span class="menu-bar-title" id="menu-bar-title">MorTweet SRS</span>
+    </nav>
+
     <header class="editor-header">
       <div class="brand">
         <img class="brand-mark" src="assets/logo.png" width="40" height="40" alt="" aria-hidden="true" />
@@ -65,13 +161,19 @@
           <span class="header-compact-icon" aria-hidden="true">↓</span>
           <span class="header-compact-label">Download</span>
         </button>
-        <label class="mor-btn import-btn header-compact-btn" id="import-btn" for="import-file" title="Load a deck from a JSON file" aria-label="Load deck from file">
+        <label class="mor-btn import-btn header-compact-btn" id="import-btn" for="import-file" title="Load a deck from a JSON file (replaces current deck)" aria-label="Load deck from file">
           <span class="header-compact-icon" aria-hidden="true">↑</span>
           <span class="header-compact-label">Load file</span>
         </label>
         <input
           type="file"
           id="import-file"
+          accept="application/json,.json,text/json"
+          class="file-input-hidden"
+        />
+        <input
+          type="file"
+          id="import-merge-file"
           accept="application/json,.json,text/json"
           class="file-input-hidden"
         />
@@ -294,6 +396,20 @@
       </nav>
     </div>
 
+    <footer class="editor-statusbar" id="status-bar" role="status" aria-live="polite">
+      <button type="button" class="statusbar-item statusbar-deck" id="status-deck" title="Open your deck panel">
+        <span class="statusbar-label" id="status-deck-name">My deck</span>
+        <span class="statusbar-sep" aria-hidden="true">·</span>
+        <span id="status-card-count">0 cards</span>
+      </button>
+      <span class="statusbar-item" id="status-due" title="Cards due or new">0 due</span>
+      <div class="statusbar-center">
+        <button type="button" class="statusbar-message hidden" id="status-message" title="Click to dismiss"></button>
+      </div>
+      <span class="statusbar-item" id="status-session" title="Study session progress">—</span>
+      <span class="statusbar-item statusbar-theme" id="status-theme" title="Color theme">dark</span>
+    </footer>
+
     <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile navigation">
       <button type="button" class="mobile-nav-btn" data-panel="left" id="mobile-nav-collection" aria-label="Your deck">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -314,6 +430,6 @@
     </nav>
   </div>
 
-  <script type="module" src="js/app.js?v=20"></script>
+  <script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>

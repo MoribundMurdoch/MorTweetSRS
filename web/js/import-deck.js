@@ -1,12 +1,13 @@
-import { importJson } from "./store.js";
+import { parseDeckJson } from "./store.js";
 
 /**
- * @param {string} text
+ * Read + parse a deck file without writing localStorage.
+ * @param {File} file
  * @returns {Promise<{ ok: true, collection: import('./store.js').Collection, count: number } | { ok: false, error: string }>}
  */
 export async function parseDeckFile(file) {
   const text = await readFileText(file);
-  const result = importJson(text);
+  const result = parseDeckJson(text);
   if (!result.ok) return result;
   return { ok: true, collection: result.collection, count: result.collection.posts.length };
 }

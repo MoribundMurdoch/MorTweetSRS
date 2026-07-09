@@ -167,6 +167,19 @@ export function startNewDeck(collection, name = "My deck") {
   saveCollection(collection);
 }
 
+/** Empty cards/reviews but keep the current deck name. */
+export function clearDeck(collection) {
+  collection.posts = [];
+  collection.reviews = [];
+  saveCollection(collection);
+}
+
+/** @param {Collection} collection @param {string} name */
+export function renameDeck(collection, name) {
+  collection.name = name.trim() || collection.name || "My deck";
+  saveCollection(collection);
+}
+
 /** Reset SRS progress for every post; keeps URLs, covers, and the collection name. */
 export function resetCollectionProgress(collection) {
   const now = new Date();
@@ -352,10 +365,11 @@ function normalizeImportedPost(raw) {
 }
 
 /**
+ * Parse a deck JSON string without writing localStorage.
  * @param {string} json
  * @returns {{ ok: true, collection: Collection } | { ok: false, error: string }}
  */
-export function importJson(json) {
+export function parseDeckJson(json) {
   try {
     const data = JSON.parse(json);
     if (!data || typeof data !== "object") {
@@ -370,14 +384,62 @@ export function importJson(json) {
       return { ok: false, error: "No valid cards found — each entry needs an X post URL." };
     }
 
-    const collection = {
-      name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : "Imported",
-      posts,
-      reviews: Array.isArray(data.reviews) ? data.reviews : [],
+    return {
+      ok: true,
+      collection: {
+        name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : "Imported",
+        posts,
+        reviews: Array.isArray(data.reviews) ? data.reviews : [],
+      },
     };
-    saveCollection(collection);
-    return { ok: true, collection };
   } catch {
     return { ok: false, error: "Could not read this deck file." };
   }
+}
+
+/**
+ * Replace the active deck and persist.
+ * @param {string} json
+ * @returns {{ ok: true, collection: Collection } | { ok: false, error: string }}
+ */
+export function importJson(json) {
+  const result = parseDeckJson(json);
+  if (!result.ok) return result;
+  saveCollection(result.collection);
+  return result;
+}
+
+/**
+ * Merge incoming posts into the current deck (skip duplicate URLs). Keeps current name.
+ * @param {Collection} current
+ * @param {Collection} incoming
+ * @returns {{ added: number, skipped: number }}
+ */
+export function mergeCollections(current, incoming) {
+  const urls = new Set(current.posts.map((p) => p.url));
+  const ids = new Set(current.posts.map((p) => p.id));
+  let added = 0;
+  let skipped = 0;
+
+  for (const post of incoming.posts) {
+    if (urls.has(post.url) || ids.has(post.id)) {
+      skipped += 1;
+      continue;
+    }
+    current.posts.push(post);
+    urls.add(post.url);
+    ids.add(post.id);
+    added += 1;
+
+    for (const rev of incoming.reviews) {
+      if (rev.postId === post.id) current.reviews.push(rev);
+    }
+  }
+
+  if (current.reviews.length > 500) {
+    current.reviews = current.reviews.slice(-500);
+  }
+
+  saveCollection(current);
+  return { added, skipped };
 }

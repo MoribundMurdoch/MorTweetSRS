@@ -9,10 +9,13 @@ import {
   stats,
   recordReview,
   exportJson,
-  importJson,
+  parseDeckJson,
+  mergeCollections,
   postStatus,
   resetCollectionProgress,
   startNewDeck,
+  clearDeck,
+  renameDeck,
 } from "./store.js";
 import { scheduleReview, previewInterval, GRADES } from "./srs.js";
 import { renderTweet } from "./twitter.js";
@@ -58,6 +61,8 @@ let rightOpen = true;
 let bulkDirty = false;
 let cardRevealed = false;
 let editingPostId = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let statusMessageTimer = null;
 
 const addCoverForm = createCoverForm(
   {
@@ -137,10 +142,75 @@ const els = {
   exportBtn: document.getElementById("export-btn"),
   importBtn: document.getElementById("import-btn"),
   importFile: document.getElementById("import-file"),
+  importMergeFile: document.getElementById("import-merge-file"),
   studyAgainBtn: document.getElementById("study-again-btn"),
   deckNameLabel: document.getElementById("deck-name-label"),
   deckLibraryList: document.getElementById("deck-library-list"),
+  menuBar: document.getElementById("app-menu-bar"),
+  menuBarTitle: document.getElementById("menu-bar-title"),
+  statusDeckName: document.getElementById("status-deck-name"),
+  statusCardCount: document.getElementById("status-card-count"),
+  statusDue: document.getElementById("status-due"),
+  statusSession: document.getElementById("status-session"),
+  statusTheme: document.getElementById("status-theme"),
+  statusMessage: document.getElementById("status-message"),
+  menuCheckLeft: document.getElementById("menu-check-left"),
+  menuCheckRight: document.getElementById("menu-check-right"),
 };
+
+function setStatusMessage(text, ms = 4500) {
+  if (!els.statusMessage) return;
+  if (statusMessageTimer) {
+    clearTimeout(statusMessageTimer);
+    statusMessageTimer = null;
+  }
+  if (!text) {
+    els.statusMessage.textContent = "";
+    els.statusMessage.classList.add("hidden");
+    return;
+  }
+  els.statusMessage.textContent = text;
+  els.statusMessage.classList.remove("hidden");
+  statusMessageTimer = setTimeout(() => {
+    els.statusMessage?.classList.add("hidden");
+    statusMessageTimer = null;
+  }, ms);
+}
+
+function closeMenus() {
+  els.menuBar?.classList.remove("menu-armed");
+  els.menuBar?.querySelectorAll(".mor-menu-item.is-open").forEach((el) => {
+    el.classList.remove("is-open");
+  });
+}
+
+function refreshChrome() {
+  const s = stats(collection);
+  const name = collection.name?.trim() || "Your deck";
+  const dueTotal = s.due + s.new;
+
+  if (els.menuBarTitle) els.menuBarTitle.textContent = name;
+  if (els.statusDeckName) els.statusDeckName.textContent = name;
+  if (els.statusCardCount) {
+    els.statusCardCount.textContent = `${s.total} card${s.total === 1 ? "" : "s"}`;
+  }
+  if (els.statusDue) {
+    els.statusDue.textContent = `${dueTotal} due`;
+  }
+  if (els.statusSession) {
+    if (!queue.length) {
+      els.statusSession.textContent = s.total ? "caught up" : "empty";
+    } else {
+      els.statusSession.textContent = `${queueIndex + 1} / ${queue.length}`;
+    }
+  }
+  if (els.statusTheme) {
+    const light = document.documentElement.dataset.theme === "light";
+    els.statusTheme.textContent = light ? "light" : "dark";
+  }
+  if (els.menuCheckLeft) els.menuCheckLeft.textContent = leftOpen ? "✓" : "";
+  if (els.menuCheckRight) els.menuCheckRight.textContent = rightOpen ? "✓" : "";
+}
 
 function currentPost() {
   return queue[queueIndex] ?? null;
@@ -160,6 +230,7 @@ function refreshStats() {
     els.deckNameLabel.textContent = collection.name?.trim() || "Your deck";
     els.deckNameLabel.title = collection.name?.trim() || "Your deck";
   }
+  refreshChrome();
 
   document.getElementById("deck-panel-body")?.classList.toggle("deck-loaded", s.total > 0);
 
@@ -224,14 +295,26 @@ function confirmReplaceDeck(deckName, incomingCount) {
 
 function applyLoadedDeck(nextCollection, deckName) {
   collection = nextCollection;
+  saveCollection(collection);
   bulkDirty = false;
   editingPostId = null;
   closeEditCover();
   if (isOverlayLayout()) setPanel("left", false);
   startSession();
-  alert(
-    `Loaded "${deckName}" — ${collection.posts.length} card${collection.posts.length === 1 ? "" : "s"} ready to study.`,
+  setStatusMessage(
+    `Loaded "${deckName}" — ${collection.posts.length} card${collection.posts.length === 1 ? "" : "s"} ready.`,
   );
+}
+
+function applyMergedDeck(incoming, deckName) {
+  const { added, skipped } = mergeCollections(collection, incoming);
+  bulkDirty = false;
+  editingPostId = null;
+  closeEditCover();
+  startSession();
+  const parts = [`Merged "${deckName}" — added ${added}`];
+  if (skipped) parts.push(`skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}`);
+  setStatusMessage(parts.join(", ") + ".");
 }
 
 function openDeckLibrary() {
@@ -249,9 +332,14 @@ function openNewDeckSection() {
   nameInput?.focus();
 }
 
-function handleStartNewDeck() {
+function handleStartNewDeck(opts = {}) {
   const nameInput = document.getElementById("new-deck-name");
-  const name = nameInput?.value?.trim() || "My deck";
+  let name = nameInput?.value?.trim() || "My deck";
+  if (opts.promptName) {
+    const entered = prompt("Name for the new deck:", name === "My Tweets" ? "My deck" : name);
+    if (entered === null) return;
+    name = entered.trim() || "My deck";
+  }
   const count = collection.posts.length;
 
   if (count > 0) {
@@ -275,6 +363,162 @@ function handleStartNewDeck() {
   startSession();
   setPanel("left", true);
   els.urlInput?.focus();
+  setStatusMessage(`Started new deck "${name}".`);
+}
+
+function handleClearDeck() {
+  const count = collection.posts.length;
+  if (!count) {
+    setStatusMessage("Deck is already empty.");
+    return;
+  }
+  if (
+    !confirm(
+      `Clear all ${count} card${count === 1 ? "" : "s"} from "${collection.name?.trim() || "Your deck"}"?\n\n` +
+        "This removes cards and review history from this device. Download first if you want a copy.",
+    )
+  ) {
+    return;
+  }
+  clearDeck(collection);
+  bulkDirty = false;
+  els.bulkInput.value = "";
+  editingPostId = null;
+  closeEditCover();
+  startSession();
+  setStatusMessage("Deck cleared.");
+}
+
+function handleRenameDeck() {
+  const current = collection.name?.trim() || "My deck";
+  const entered = prompt("Deck name:", current);
+  if (entered === null) return;
+  renameDeck(collection, entered);
+  refreshStats();
+  setStatusMessage(`Renamed deck to "${collection.name}".`);
+}
+
+function handleResetProgress() {
+  const count = collection.posts.length;
+  if (!count) {
+    setStatusMessage("No cards to reset.");
+    return;
+  }
+  if (
+    !confirm(
+      `Reset study progress for all ${count} card${count === 1 ? "" : "s"}?\n\n` +
+        "Schedules and review history will be cleared. Your cards and recall covers are kept.",
+    )
+  ) {
+    return;
+  }
+  resetCollectionProgress(collection);
+  startSession();
+  setStatusMessage("Study progress reset.");
+}
+
+function toggleTheme() {
+  const isLight = document.documentElement.dataset.theme === "light";
+  document.documentElement.dataset.theme = isLight ? "dark" : "light";
+  localStorage.setItem("mor_tweet_srs_theme", isLight ? "dark" : "light");
+  refreshChrome();
+  if (cardRevealed && currentPost()) {
+    renderTweet(els.tweetFrame, currentPost().url);
+  }
+}
+
+function showShortcutsHelp() {
+  alert(
+    "Keyboard shortcuts\n\n" +
+      "Study\n" +
+      "  Space / Enter — reveal post\n" +
+      "  1–4 — grade card\n" +
+      "  R — refresh due cards\n\n" +
+      "Deck\n" +
+      "  Ctrl+N — new deck\n" +
+      "  Ctrl+O — load deck (replace)\n" +
+      "  Ctrl+Shift+O — load deck (merge)\n" +
+      "  Ctrl+S — download deck\n\n" +
+      "Menu bar: File · Deck · View · Help",
+  );
+}
+
+function showAbout() {
+  alert(
+    "MorTweet SRS\n\n" +
+      "Spaced repetition for saved X posts.\n" +
+      "Decks are stored in this browser/device.\n" +
+      "Download JSON to back up or share.\n\n" +
+      "Library: github.com/MoribundMurdoch/MorTweetSRS-Decks",
+  );
+}
+
+function focusAddCard() {
+  setPanel("left", true);
+  document.getElementById("add-card-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  els.urlInput?.focus();
+}
+
+/**
+ * @param {string} action
+ */
+function runMenuAction(action) {
+  closeMenus();
+  switch (action) {
+    case "new-deck":
+      handleStartNewDeck({ promptName: true });
+      break;
+    case "clear-deck":
+      handleClearDeck();
+      break;
+    case "load-replace":
+      els.importFile?.click();
+      break;
+    case "load-merge":
+      els.importMergeFile?.click();
+      break;
+    case "open-library":
+      openDeckLibrary();
+      break;
+    case "download":
+      downloadDeck();
+      break;
+    case "rename-deck":
+      handleRenameDeck();
+      break;
+    case "reset-progress":
+      handleResetProgress();
+      break;
+    case "study-again":
+      startSession();
+      setStatusMessage("Due cards refreshed.");
+      break;
+    case "focus-add":
+      focusAddCard();
+      break;
+    case "toggle-left":
+      setPanel("left", !leftOpen);
+      refreshChrome();
+      break;
+    case "toggle-right":
+      setPanel("right", !rightOpen);
+      refreshChrome();
+      break;
+    case "toggle-theme":
+      toggleTheme();
+      break;
+    case "shortcuts":
+      showShortcutsHelp();
+      break;
+    case "github-library":
+      window.open(DECK_LIBRARY_REPO_URL, "_blank", "noopener,noreferrer");
+      break;
+    case "about":
+      showAbout();
+      break;
+    default:
+      break;
+  }
 }
 
 function escapeHtml(text) {
@@ -306,27 +550,43 @@ function renderDeckLibrary(decks) {
             <div class="deck-library-meta">${escapeHtml(meta)}</div>
             ${deck.description ? `<p class="deck-library-desc">${escapeHtml(deck.description)}</p>` : ""}
           </div>
-          <button
-            type="button"
-            class="mor-btn primary deck-load-btn"
-            data-deck-id="${escapeHtml(deck.id)}"
-            data-deck-file="${escapeHtml(deck.file)}"
-            data-deck-name="${escapeHtml(deck.name)}"
-            data-deck-posts="${deck.posts ?? ""}"
-          >Load deck</button>
+          <div class="deck-library-btns">
+            <button
+              type="button"
+              class="mor-btn primary deck-load-btn"
+              data-mode="replace"
+              data-deck-id="${escapeHtml(deck.id)}"
+              data-deck-file="${escapeHtml(deck.file)}"
+              data-deck-name="${escapeHtml(deck.name)}"
+              data-deck-posts="${deck.posts ?? ""}"
+            >Replace</button>
+            <button
+              type="button"
+              class="mor-btn deck-merge-btn"
+              data-mode="merge"
+              data-deck-id="${escapeHtml(deck.id)}"
+              data-deck-file="${escapeHtml(deck.file)}"
+              data-deck-name="${escapeHtml(deck.name)}"
+              data-deck-posts="${deck.posts ?? ""}"
+            >Merge</button>
+          </div>
         </li>
       `;
     })
     .join("")}</ul>`;
 
-  els.deckLibraryList.querySelectorAll(".deck-load-btn").forEach((btn) => {
+  els.deckLibraryList.querySelectorAll(".deck-load-btn, .deck-merge-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      void loadDeckFromLibrary({
-        id: btn.dataset.deckId,
-        name: btn.dataset.deckName,
-        file: btn.dataset.deckFile,
-        posts: Number(btn.dataset.deckPosts) || undefined,
-      }, btn);
+      void loadDeckFromLibrary(
+        {
+          id: btn.dataset.deckId,
+          name: btn.dataset.deckName,
+          file: btn.dataset.deckFile,
+          posts: Number(btn.dataset.deckPosts) || undefined,
+        },
+        btn,
+        btn.dataset.mode === "merge" ? "merge" : "replace",
+      );
     });
   });
 }
@@ -345,9 +605,14 @@ function renderDeckLibraryError(message) {
   });
 }
 
-async function loadDeckFromLibrary(deck, button) {
+/**
+ * @param {{ id?: string, name?: string, file: string, posts?: number }} deck
+ * @param {HTMLButtonElement} button
+ * @param {'replace' | 'merge'} [mode]
+ */
+async function loadDeckFromLibrary(deck, button, mode = "replace") {
   const deckName = deck.name || "Deck";
-  if (!confirmReplaceDeck(deckName, deck.posts)) return;
+  if (mode === "replace" && !confirmReplaceDeck(deckName, deck.posts)) return;
 
   const originalText = button.textContent;
   button.disabled = true;
@@ -355,18 +620,32 @@ async function loadDeckFromLibrary(deck, button) {
 
   try {
     const json = await fetchDeckText(deck.file);
-    const result = importJson(json);
+    const result = parseDeckJson(json);
     if (!result.ok) {
       alert(result.error);
       return;
     }
-    applyLoadedDeck(result.collection, result.collection.name?.trim() || deckName);
+    if (mode === "merge") {
+      applyMergedDeck(result.collection, result.collection.name?.trim() || deckName);
+    } else {
+      applyLoadedDeck(result.collection, result.collection.name?.trim() || deckName);
+    }
   } catch {
     alert("Could not load that deck. Check your connection and try again.");
   } finally {
     button.disabled = false;
     button.textContent = originalText;
   }
+}
+
+function downloadDeck() {
+  const blob = new Blob([exportJson(collection)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = deckFilename();
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatusMessage(`Downloaded ${deckFilename()}.`);
 }
 
 async function initDeckLibrary() {
@@ -805,6 +1084,7 @@ function setPanel(side, open, opts = {}) {
 
   syncPanelBackdrop();
   syncMobileNav();
+  refreshChrome();
 }
 
 function initResponsiveLayout() {
@@ -969,28 +1249,16 @@ function bindEvents() {
     setPanel("right", false);
   });
 
-  els.themeBtn.addEventListener("click", () => {
-    const isLight = document.documentElement.dataset.theme === "light";
-    document.documentElement.dataset.theme = isLight ? "dark" : "light";
-    localStorage.setItem("mor_tweet_srs_theme", isLight ? "dark" : "light");
-    if (cardRevealed && currentPost()) {
-      renderTweet(els.tweetFrame, currentPost().url);
-    }
-  });
-
-  function downloadDeck() {
-    const blob = new Blob([exportJson(collection)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = deckFilename();
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
+  els.themeBtn.addEventListener("click", toggleTheme);
 
   els.exportBtn.addEventListener("click", downloadDeck);
   document.getElementById("share-deck-btn")?.addEventListener("click", downloadDeck);
 
-  async function handleImportFile(file) {
+  /**
+   * @param {File | undefined | null} file
+   * @param {'replace' | 'merge'} [mode]
+   */
+  async function handleImportFile(file, mode = "replace") {
     if (!file) return;
 
     let result;
@@ -1007,28 +1275,42 @@ function bindEvents() {
     }
 
     const deckName = result.collection.name?.trim() || file.name.replace(/\.json$/i, "");
+    if (mode === "merge") {
+      applyMergedDeck(result.collection, deckName);
+      return;
+    }
     if (!confirmReplaceDeck(deckName, result.count)) return;
     applyLoadedDeck(result.collection, deckName);
   }
 
-  const onImportInput = async () => {
+  els.importFile?.addEventListener("change", async () => {
     const file = els.importFile?.files?.[0];
     if (!file) return;
-    await handleImportFile(file);
+    await handleImportFile(file, "replace");
     if (els.importFile) els.importFile.value = "";
-  };
+  });
 
-  els.importFile?.addEventListener("change", onImportInput);
+  els.importMergeFile?.addEventListener("change", async () => {
+    const file = els.importMergeFile?.files?.[0];
+    if (!file) return;
+    await handleImportFile(file, "merge");
+    if (els.importMergeFile) els.importMergeFile.value = "";
+  });
 
   window.addEventListener("message", async (event) => {
     const data = event.data;
     if (!data || data.type !== "mortweet-import" || typeof data.json !== "string") return;
-    const result = importJson(data.json);
+    const result = parseDeckJson(data.json);
     if (!result.ok) {
       alert(result.error);
       return;
     }
     const deckName = result.collection.name?.trim() || "Deck";
+    const mode = data.merge === true ? "merge" : "replace";
+    if (mode === "merge") {
+      applyMergedDeck(result.collection, deckName);
+      return;
+    }
     if (!confirmReplaceDeck(deckName, result.collection.posts.length)) return;
     applyLoadedDeck(result.collection, deckName);
   });
@@ -1042,23 +1324,78 @@ function bindEvents() {
     deletePost(post.id);
   });
 
-  document.getElementById("reset-progress")?.addEventListener("click", () => {
-    const count = collection.posts.length;
-    if (!count) return;
-    if (
-      !confirm(
-        `Reset study progress for all ${count} card${count === 1 ? "" : "s"}?\n\n` +
-          "Schedules and review history will be cleared. Your cards and recall covers are kept.",
-      )
-    ) {
+  document.getElementById("reset-progress")?.addEventListener("click", handleResetProgress);
+
+  els.menuBar?.addEventListener("click", (e) => {
+    const actionBtn = e.target.closest("[data-action]");
+    if (actionBtn instanceof HTMLElement && actionBtn.dataset.action) {
+      e.preventDefault();
+      e.stopPropagation();
+      runMenuAction(actionBtn.dataset.action);
       return;
     }
-    resetCollectionProgress(collection);
-    startSession();
+
+    const topItem = e.target.closest(".mor-menu-bar > .mor-menu-item");
+    if (!(topItem instanceof HTMLElement) || !els.menuBar?.contains(topItem)) return;
+    if (e.target.closest(".mor-menu-dropdown")) return;
+
+    e.preventDefault();
+    const wasOpen = topItem.classList.contains("is-open");
+    closeMenus();
+    if (!wasOpen) {
+      topItem.classList.add("is-open");
+      els.menuBar.classList.add("menu-armed");
+    }
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if (!(e.target instanceof Node)) return;
+    if (els.menuBar?.contains(e.target)) return;
+    closeMenus();
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key === "Escape") closeMenus();
+  });
+
+  els.statusMessage?.addEventListener("click", () => setStatusMessage(""));
+  document.getElementById("status-deck")?.addEventListener("click", () => {
+    setPanel("left", true);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.altKey) {
+      const key = e.key.toLowerCase();
+      if (key === "n") {
+        e.preventDefault();
+        runMenuAction("new-deck");
+        return;
+      }
+      if (key === "o") {
+        e.preventDefault();
+        runMenuAction(e.shiftKey ? "load-merge" : "load-replace");
+        return;
+      }
+      if (key === "s") {
+        e.preventDefault();
+        runMenuAction("download");
+        return;
+      }
+    }
+
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+      return;
+    }
+
+    if (e.key === "r" || e.key === "R") {
+      if (!mod) {
+        e.preventDefault();
+        runMenuAction("study-again");
+        return;
+      }
+    }
+
     const post = currentPost();
     if (!post) return;
 

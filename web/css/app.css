@@ -12,6 +12,153 @@
   overflow: hidden;
 }
 
+/* ── Menu bar (titlebar) ───────────────────────────────── */
+
+.mor-menu-bar {
+  display: flex;
+  align-items: center;
+  height: calc(32px + env(safe-area-inset-top, 0px));
+  padding:
+    env(safe-area-inset-top, 0px)
+    max(4px, env(safe-area-inset-right, 0px))
+    0
+    max(4px, env(safe-area-inset-left, 0px));
+  background: var(--editor-bg-deep);
+  border-bottom: 1px solid var(--editor-border);
+  font-size: 13px;
+  color: var(--editor-text);
+  user-select: none;
+  position: relative;
+  z-index: 9999;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.mor-menu-bar > .mor-menu-item {
+  position: relative;
+  height: calc(100% - 6px);
+  margin: 3px 2px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: default;
+  color: var(--editor-text);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.mor-menu-bar > .mor-menu-item.app-menu-brand {
+  padding: 0 8px;
+  gap: 0;
+}
+
+.menu-brand-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.mor-menu-bar > .mor-menu-item:hover,
+.mor-menu-bar > .mor-menu-item.is-open {
+  background-color: var(--editor-panel-raised);
+  color: var(--editor-text);
+}
+
+.mor-menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  background-color: var(--editor-panel);
+  border: 1px solid var(--editor-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  min-width: 240px;
+  padding: 5px;
+  z-index: 10000;
+}
+
+.mor-menu-bar > .mor-menu-item:hover > .mor-menu-dropdown,
+.mor-menu-bar > .mor-menu-item.is-open > .mor-menu-dropdown,
+.mor-menu-bar.menu-armed > .mor-menu-item:hover > .mor-menu-dropdown {
+  display: block;
+}
+
+.mor-menu-dropdown .mor-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: calc(100% - 4px);
+  margin: 2px;
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
+  color: var(--editor-text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.1s ease, color 0.1s ease;
+  box-sizing: border-box;
+  text-align: left;
+  gap: 16px;
+}
+
+.mor-menu-dropdown .mor-menu-item:hover:not(.disabled),
+.mor-menu-dropdown .mor-menu-item:focus-visible:not(.disabled) {
+  background-color: var(--editor-accent);
+  color: #ffffff;
+  outline: none;
+}
+
+.mor-menu-dropdown .mor-menu-item.disabled {
+  color: var(--editor-muted-2);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mor-menu-dropdown .mor-menu-item .shortcut {
+  font-size: 11px;
+  color: var(--editor-muted);
+  margin-left: auto;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.mor-menu-dropdown .mor-menu-item:hover:not(.disabled) .shortcut,
+.mor-menu-dropdown .mor-menu-item:focus-visible:not(.disabled) .shortcut {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mor-menu-divider {
+  height: 1px;
+  background-color: var(--editor-border-soft);
+  margin: 5px 4px;
+}
+
+.menu-bar-spacer {
+  flex: 1;
+  min-width: 8px;
+  pointer-events: none;
+}
+
+.menu-bar-title {
+  font-size: 11px;
+  color: var(--editor-muted);
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+  pointer-events: none;
+}
+
 /* ── Header ────────────────────────────────────────────── */
 
 .editor-header {
@@ -19,11 +166,11 @@
   align-items: center;
   gap: 16px;
   padding:
-    max(0px, env(safe-area-inset-top))
+    0
     max(18px, env(safe-area-inset-right))
     0
     max(18px, env(safe-area-inset-left));
-  height: calc(52px + env(safe-area-inset-top, 0px));
+  height: 52px;
   background: color-mix(in srgb, var(--editor-bg-deep) 92%, transparent);
   border-bottom: 1px solid var(--editor-border);
   backdrop-filter: blur(12px);
@@ -1159,9 +1306,16 @@ a.mor-btn:hover {
   line-height: 1.45;
 }
 
-.deck-load-btn {
-  width: 100%;
-  min-height: 40px;
+.deck-library-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.deck-load-btn,
+.deck-merge-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
 }
 
 .deck-library-actions {
@@ -1414,7 +1568,8 @@ a.mor-btn:hover {
 .panel-backdrop {
   position: fixed;
   inset: 0;
-  top: calc(52px + env(safe-area-inset-top, 0px));
+  top: calc(32px + 52px + env(safe-area-inset-top, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 150;
   background: rgba(0, 0, 0, 0.45);
   opacity: 0;
@@ -1429,6 +1584,92 @@ a.mor-btn:hover {
 
 body.panel-open {
   overflow: hidden;
+}
+
+/* ── Status bar ────────────────────────────────────────── */
+
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: calc(24px + env(safe-area-inset-bottom, 0px));
+  padding:
+    0
+    max(8px, env(safe-area-inset-right, 0px))
+    env(safe-area-inset-bottom, 0px)
+    max(8px, env(safe-area-inset-left, 0px));
+  font-size: 0.72rem;
+  background: var(--mor-header);
+  border-top: 1px solid var(--mor-border);
+  color: var(--editor-text);
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  z-index: 200;
+}
+
+.statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0.9;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  max-width: 28%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.statusbar-item {
+  cursor: pointer;
+}
+
+button.statusbar-item:hover,
+button.statusbar-item:focus-visible {
+  background: var(--editor-panel-soft);
+  outline: none;
+}
+
+.statusbar-sep {
+  opacity: 0.5;
+}
+
+.statusbar-center {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+}
+
+.statusbar-message {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.9;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.statusbar-message:hover {
+  background: var(--editor-panel-soft);
+}
+
+.statusbar-message.hidden {
+  display: none;
+}
+
+.statusbar-theme {
+  text-transform: lowercase;
+  opacity: 0.75;
 }
 
 /* ── Mobile bottom navigation ──────────────────────────── */
@@ -1505,8 +1746,8 @@ body.panel-open {
   .panel-container.left,
   .panel-container.right {
     position: fixed;
-    top: calc(52px + env(safe-area-inset-top, 0px));
-    bottom: 0;
+    top: calc(32px + 52px + env(safe-area-inset-top, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     z-index: 200;
     width: min(320px, calc(100vw - 44px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
     max-width: 100%;
@@ -1614,12 +1855,36 @@ body.panel-open {
     display: none;
   }
 
+  .menu-bar-title {
+    display: none;
+  }
+
+  .mor-menu-bar > .mor-menu-item {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .menu-bar-title {
+    display: none;
+  }
+
+  .mor-menu-bar > .mor-menu-item {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
   .mobile-bottom-nav {
     display: flex;
     flex-shrink: 0;
     background: color-mix(in srgb, var(--editor-bg-deep) 94%, transparent);
     border-top: 1px solid var(--editor-border);
     backdrop-filter: blur(12px);
+  }
+
+  .editor-statusbar {
+    height: 24px;
+    padding-bottom: 0;
+    border-top: 1px solid var(--editor-border-soft);
   }
 
   .editor-main {
@@ -1630,17 +1895,17 @@ body.panel-open {
     grid-column: 1;
   }
 
-  .panel-backdrop {
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-  }
-
   .panel-container.left,
   .panel-container.right {
     left: 0;
     right: 0;
     width: 100%;
     max-width: 100%;
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(24px + 56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .panel-backdrop {
+    bottom: calc(24px + 56px + env(safe-area-inset-bottom, 0px));
   }
 
   .panel-container.left.collapsed {
