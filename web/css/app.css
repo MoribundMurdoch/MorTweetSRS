@@ -802,16 +802,7 @@
   object-fit: contain;
 }
 
-.post-cover-tag {
-  display: inline-block;
-  font-size: 9px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--editor-new) 14%, transparent);
-  color: var(--editor-new);
-  margin-left: 4px;
-  vertical-align: middle;
-}
+/* post-cover-tag base styles live with the deck card list */
 
 @keyframes card-enter {
   from {
@@ -1333,100 +1324,263 @@ a.mor-btn:hover {
   margin-top: 4px;
 }
 
-/* ── Post list ─────────────────────────────────────────── */
+/* ── Post list (Cards in this deck) ────────────────────── */
+
+.cards-in-deck-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cards-in-deck-header .section-title {
+  margin: 0;
+}
+
+.cards-in-deck-count {
+  font-family: var(--mor-mono);
+  font-size: 10px;
+  font-weight: 500;
+  min-width: 1.5rem;
+  text-align: center;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--editor-panel);
+  border: 1px solid var(--editor-border-soft);
+  color: var(--editor-muted);
+}
+
+.cards-filter {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.cards-filter-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid var(--editor-border-soft);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--editor-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.cards-filter-btn:hover {
+  color: var(--editor-text);
+  background: var(--editor-panel-soft);
+}
+
+.cards-filter-btn.active {
+  color: var(--editor-accent);
+  background: color-mix(in srgb, var(--editor-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--editor-accent) 30%, transparent);
+}
+
+.cards-empty {
+  margin: 0 0 8px;
+  padding: 14px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--editor-muted);
+  text-align: center;
+  border: 1px dashed var(--editor-border-soft);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--editor-panel) 60%, transparent);
+}
 
 .post-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(48vh, 420px);
+  overflow-y: auto;
 }
 
 .post-item {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   padding: 9px 10px;
-  margin-bottom: 3px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--editor-border-soft);
+  background: var(--editor-panel);
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 
 .post-item:hover {
-  background: var(--editor-panel-soft);
+  background: color-mix(in srgb, var(--editor-panel-raised) 80%, var(--editor-panel));
+  border-color: var(--editor-border);
 }
 
 .post-item.active {
   background: color-mix(in srgb, var(--editor-accent) 10%, var(--editor-panel));
-  border-color: color-mix(in srgb, var(--editor-accent) 28%, transparent);
+  border-color: color-mix(in srgb, var(--editor-accent) 32%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-accent) 18%, transparent);
 }
 
-.post-item .status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-top: 6px;
+.post-item.editing {
+  background: color-mix(in srgb, var(--editor-new) 10%, var(--editor-panel));
+  border-color: color-mix(in srgb, var(--editor-new) 28%, transparent);
+}
+
+.post-item.status-due {
+  border-left: 3px solid var(--editor-accent);
+}
+
+.post-item.status-new {
+  border-left: 3px solid var(--editor-new);
+}
+
+.post-item.status-ok {
+  border-left: 3px solid color-mix(in srgb, var(--editor-muted) 45%, transparent);
+}
+
+.post-thumb {
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
-  box-shadow: 0 0 6px currentColor;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--editor-bg-deep);
+  border: 1px solid var(--editor-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--editor-muted);
 }
 
-.post-item .status-dot.new { color: var(--editor-new); background: var(--editor-new); }
-.post-item .status-dot.due { color: var(--editor-accent); background: var(--editor-accent); }
-.post-item .status-dot.ok { color: var(--editor-muted-2); background: var(--editor-muted-2); box-shadow: none; }
+.post-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.post-thumb.text-thumb {
+  color: var(--editor-new);
+  background: color-mix(in srgb, var(--editor-new) 10%, var(--editor-bg-deep));
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+
+.post-thumb.bare-thumb {
+  color: var(--editor-muted-2);
+  font-size: 14px;
+}
 
 .post-item .info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.post-item .url {
-  font-family: var(--mor-mono);
-  font-size: 11px;
-  white-space: nowrap;
+.post-title {
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.3;
+  color: var(--editor-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.post-item .due-label {
+.post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
   font-size: 10px;
   color: var(--editor-muted);
-  margin-top: 2px;
+  line-height: 1.2;
+}
+
+.post-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.post-badge.new {
+  color: var(--editor-new);
+  background: color-mix(in srgb, var(--editor-new) 14%, transparent);
+}
+
+.post-badge.due {
+  color: var(--editor-accent);
+  background: color-mix(in srgb, var(--editor-accent) 14%, transparent);
+}
+
+.post-badge.ok {
+  color: var(--editor-muted);
+  background: color-mix(in srgb, var(--editor-muted) 12%, transparent);
+}
+
+.post-due {
+  color: var(--editor-muted);
+}
+
+.post-id {
+  font-family: var(--mor-mono);
+  font-size: 9px;
+  color: var(--editor-muted-2);
+  margin-left: auto;
 }
 
 .post-actions {
   display: flex;
+  flex-direction: column;
   flex-shrink: 0;
-  gap: 2px;
+  gap: 3px;
 }
 
 .post-edit-btn,
 .post-remove-btn {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--editor-muted);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.55;
   transition: opacity 0.15s, color 0.15s, background 0.15s;
 }
 
 .post-item:hover .post-edit-btn,
 .post-item:hover .post-remove-btn,
 .post-item:focus-within .post-edit-btn,
-.post-item:focus-within .post-remove-btn {
+.post-item:focus-within .post-remove-btn,
+.post-item.active .post-edit-btn,
+.post-item.active .post-remove-btn {
   opacity: 1;
-}
-
-.post-item.editing {
-  background: color-mix(in srgb, var(--editor-new) 10%, var(--editor-panel));
-  border-color: color-mix(in srgb, var(--editor-new) 28%, transparent);
 }
 
 .post-edit-btn:hover {
@@ -1439,6 +1593,22 @@ a.mor-btn:hover {
   color: var(--editor-danger);
   background: color-mix(in srgb, var(--editor-danger) 12%, transparent);
   border-color: color-mix(in srgb, var(--editor-danger) 25%, var(--editor-border));
+}
+
+.post-cover-tag {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--editor-new) 14%, transparent);
+  color: var(--editor-new);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.post-cover-tag.muted {
+  background: color-mix(in srgb, var(--editor-muted) 12%, transparent);
+  color: var(--editor-muted);
 }
 
 .edit-cover-url {

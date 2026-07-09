@@ -34,11 +34,11 @@
           </button>
           <div class="mor-menu-divider" role="separator"></div>
           <button type="button" class="mor-menu-item" data-action="load-replace" role="menuitem">
-            <span>Load deck (replace)…</span>
+            <span>Open deck file (replace)…</span>
             <span class="shortcut">Ctrl+O</span>
           </button>
           <button type="button" class="mor-menu-item" data-action="load-merge" role="menuitem">
-            <span>Load deck (merge)…</span>
+            <span>Merge deck file into current…</span>
             <span class="shortcut">Ctrl+Shift+O</span>
           </button>
           <button type="button" class="mor-menu-item" data-action="open-library" role="menuitem">
@@ -46,7 +46,7 @@
           </button>
           <div class="mor-menu-divider" role="separator"></div>
           <button type="button" class="mor-menu-item" data-action="download" role="menuitem">
-            <span>Download deck…</span>
+            <span>Download backup (.json)…</span>
             <span class="shortcut">Ctrl+S</span>
           </button>
         </div>
@@ -157,13 +157,13 @@
           <span class="header-compact-icon" aria-hidden="true">⊞</span>
           <span class="header-compact-label">Library</span>
         </button>
-        <button type="button" class="mor-btn header-compact-btn" id="export-btn" title="Download your deck to share" aria-label="Download deck">
+        <button type="button" class="mor-btn header-compact-btn" id="export-btn" title="Download a JSON backup to share or restore later (your deck also auto-saves here)" aria-label="Download deck backup">
           <span class="header-compact-icon" aria-hidden="true">↓</span>
           <span class="header-compact-label">Download</span>
         </button>
-        <label class="mor-btn import-btn header-compact-btn" id="import-btn" for="import-file" title="Load a deck from a JSON file (replaces current deck)" aria-label="Load deck from file">
+        <label class="mor-btn import-btn header-compact-btn" id="import-btn" for="import-file" title="Open a .json deck file — replaces your current deck (confirm first if you have cards)" aria-label="Open deck file (replace)">
           <span class="header-compact-icon" aria-hidden="true">↑</span>
-          <span class="header-compact-label">Load file</span>
+          <span class="header-compact-label">Open file</span>
         </label>
         <input
           type="file"
@@ -196,12 +196,15 @@
         <div class="panel-body mor-scroll" id="deck-panel-body">
           <section class="panel-section deck-library-section" id="deck-library-section">
             <h3 class="section-title">Deck library</h3>
-            <p class="panel-hint">Ready-made decks you can load in one tap.</p>
+            <p class="panel-hint"><strong>Load</strong> replaces your deck. <strong>Merge</strong> adds cards you don't already have.</p>
             <div class="deck-library-list" id="deck-library-list">
               <p class="deck-library-status">Loading decks…</p>
             </div>
             <div class="mor-btn-row deck-library-actions">
-              <label class="mor-btn" for="import-file">Load from file</label>
+              <label class="mor-btn" for="import-file" title="Replace your current deck with a .json file">Open file…</label>
+              <label class="mor-btn ghost" for="import-merge-file" title="Add cards from a .json file without wiping your deck">Merge file…</label>
+            </div>
+            <div class="mor-btn-row deck-library-actions">
               <a
                 class="mor-btn ghost"
                 href="https://github.com/MoribundMurdoch/MorTweetSRS-Decks"
@@ -212,14 +215,14 @@
           </section>
 
           <section class="panel-section deck-share-section">
-            <h3 class="section-title">Share your deck</h3>
-            <p class="panel-hint">Download a JSON file to share with friends or add to the library on GitHub.</p>
-            <button type="button" class="mor-btn" id="share-deck-btn">Download deck</button>
+            <h3 class="section-title">Backup &amp; share</h3>
+            <p class="panel-hint">Your deck auto-saves in this browser. Download a .json file to back up, share, or move to another device.</p>
+            <button type="button" class="mor-btn" id="share-deck-btn">Download backup</button>
           </section>
 
           <section class="panel-section new-deck-section" id="new-deck-section">
             <h3 class="section-title">New deck</h3>
-            <p class="panel-hint">Start fresh with a blank deck. Download your current deck first if you want to keep it.</p>
+            <p class="panel-hint">Start fresh with a blank deck. Download a backup first if you want to keep the current one.</p>
             <div class="mor-input-wrapper">
               <label class="mor-input-label" for="new-deck-name">Deck name</label>
               <input class="mor-input" id="new-deck-name" type="text" placeholder="My deck" maxlength="80" />
@@ -310,7 +313,17 @@
           </section>
 
           <section class="panel-section panel-section-flush cards-in-deck-section" id="cards-in-deck-section">
-            <h3 class="section-title">Cards in this deck</h3>
+            <div class="cards-in-deck-header">
+              <h3 class="section-title">Cards in this deck</h3>
+              <span class="cards-in-deck-count" id="cards-in-deck-count">0</span>
+            </div>
+            <div class="cards-filter" id="cards-filter" role="tablist" aria-label="Filter cards">
+              <button type="button" class="cards-filter-btn active" data-filter="all" role="tab" aria-selected="true">All</button>
+              <button type="button" class="cards-filter-btn" data-filter="due" role="tab" aria-selected="false">Due</button>
+              <button type="button" class="cards-filter-btn" data-filter="new" role="tab" aria-selected="false">New</button>
+              <button type="button" class="cards-filter-btn" data-filter="later" role="tab" aria-selected="false">Later</button>
+            </div>
+            <p class="cards-empty hidden" id="cards-empty">No cards yet. Add a post URL above or open a deck file.</p>
             <ul class="post-list mor-scroll" id="post-list"></ul>
           </section>
         </div>
@@ -333,11 +346,11 @@
           <div class="empty-state" id="empty-state">
             <div class="state-icon" aria-hidden="true">◎</div>
             <h2>Your deck is empty</h2>
-            <p class="empty-state-lead">Start a new deck, load one from the library, or open a JSON file someone shared with you.</p>
+            <p class="empty-state-lead">Start a new deck, open the library, or open a .json backup someone shared with you.</p>
             <div class="empty-state-actions">
               <button type="button" class="mor-btn primary" id="empty-new-deck-btn">Start new deck</button>
               <button type="button" class="mor-btn" id="empty-library-btn">Browse deck library</button>
-              <button type="button" class="mor-btn ghost" id="empty-load-file-btn">Load from file</button>
+              <button type="button" class="mor-btn ghost" id="empty-load-file-btn">Open deck file</button>
             </div>
           </div>
 
@@ -415,9 +428,9 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
         <span>Your deck</span>
       </button>
-      <button type="button" class="mobile-nav-btn" id="mobile-nav-import" aria-label="Load deck from file">
+      <button type="button" class="mobile-nav-btn" id="mobile-nav-import" aria-label="Open deck file (replaces current deck)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></svg>
-        <span>Load file</span>
+        <span>Open file</span>
       </button>
       <button type="button" class="mobile-nav-btn" id="mobile-nav-library" aria-label="Deck library">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -430,6 +443,6 @@
     </nav>
   </div>
 
-  <script type="module" src="js/app.js?v=21"></script>
+  <script type="module" src="js/app.js?v=23"></script>
 </body>
 </html>

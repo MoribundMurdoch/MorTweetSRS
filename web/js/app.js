@@ -61,6 +61,8 @@ let rightOpen = true;
 let bulkDirty = false;
 let cardRevealed = false;
 let editingPostId = null;
+/** @type {'all' | 'due' | 'new' | 'later'} */
+let cardsFilter = "all";
 /** @type {ReturnType<typeof setTimeout> | null} */
 let statusMessageTimer = null;
 
@@ -283,13 +285,32 @@ function confirmReplaceDeck(deckName, incomingCount) {
   const current = collection.posts.length;
   if (current === 0) return true;
   const incomingLabel =
-    typeof incomingCount === "number" && incomingCount > 0
+    typeof incomingCount === "number"
       ? `${incomingCount} card${incomingCount === 1 ? "" : "s"}`
       : "this deck";
   return confirm(
-    `Load "${deckName}" (${incomingLabel})?\n\n` +
-      `This replaces your current deck (${current} card${current === 1 ? "" : "s"}). ` +
-      "Download your deck first if you want to keep a copy.",
+    `Replace your current deck with "${deckName}" (${incomingLabel})?\n\n` +
+      `Your current deck (${current} card${current === 1 ? "" : "s"}) will be wiped from this device. ` +
+      "Use Download first if you want a backup.\n\n" +
+      "Tip: File → Load deck (merge) adds cards without wiping.",
+  );
+}
+
+function confirmMergeDeck(deckName, incomingCount) {
+  const current = collection.posts.length;
+  const incomingLabel =
+    typeof incomingCount === "number"
+      ? `${incomingCount} card${incomingCount === 1 ? "" : "s"}`
+      : "cards";
+  if (current === 0) {
+    return confirm(
+      `Load "${deckName}" (${incomingLabel}) into your empty deck?\n\n` +
+        "Cards and study progress from the file will be kept.",
+    );
+  }
+  return confirm(
+    `Merge "${deckName}" (${incomingLabel}) into your current deck?\n\n` +
+      `Adds only cards you don't already have. Your existing ${current} card${current === 1 ? "" : "s"} and study progress stay put.`,
   );
 }
 
@@ -301,20 +322,31 @@ function applyLoadedDeck(nextCollection, deckName) {
   closeEditCover();
   if (isOverlayLayout()) setPanel("left", false);
   startSession();
+  const n = collection.posts.length;
   setStatusMessage(
-    `Loaded "${deckName}" — ${collection.posts.length} card${collection.posts.length === 1 ? "" : "s"} ready.`,
+    n
+      ? `Loaded "${deckName}" — ${n} card${n === 1 ? "" : "s"} ready (auto-saved).`
+      : `Loaded empty deck "${deckName}" (auto-saved).`,
   );
 }
 
 function applyMergedDeck(incoming, deckName) {
+  const before = collection.posts.length;
   const { added, skipped } = mergeCollections(collection, incoming);
   bulkDirty = false;
   editingPostId = null;
   closeEditCover();
   startSession();
-  const parts = [`Merged "${deckName}" — added ${added}`];
-  if (skipped) parts.push(`skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}`);
-  setStatusMessage(parts.join(", ") + ".");
+  if (added === 0 && skipped > 0) {
+    setStatusMessage(`Merge "${deckName}" — already had all ${skipped} card${skipped === 1 ? "" : "s"}.`);
+  } else if (added === 0) {
+    setStatusMessage(`Merge "${deckName}" — no cards to add.`);
+  } else {
+    const parts = [`Merged "${deckName}" — added ${added}`];
+    if (skipped) parts.push(`skipped ${skipped} already in deck`);
+    parts.push(`now ${before + added} total`);
+    setStatusMessage(parts.join(", ") + ".");
+  }
 }
 
 function openDeckLibrary() {
@@ -436,9 +468,10 @@ function showShortcutsHelp() {
       "  R — refresh due cards\n\n" +
       "Deck\n" +
       "  Ctrl+N — new deck\n" +
-      "  Ctrl+O — load deck (replace)\n" +
-      "  Ctrl+Shift+O — load deck (merge)\n" +
-      "  Ctrl+S — download deck\n\n" +
+      "  Ctrl+O — open deck file (replace)\n" +
+      "  Ctrl+Shift+O — merge deck file\n" +
+      "  Ctrl+S — download .json backup\n\n" +
+      "Your deck auto-saves in this browser.\n" +
       "Menu bar: File · Deck · View · Help",
   );
 }
@@ -446,9 +479,10 @@ function showShortcutsHelp() {
 function showAbout() {
   alert(
     "MorTweet SRS\n\n" +
-      "Spaced repetition for saved X posts.\n" +
-      "Decks are stored in this browser/device.\n" +
-      "Download JSON to back up or share.\n\n" +
+      "Spaced repetition for saved X posts.\n\n" +
+      "Saving: your deck auto-saves in this browser/device.\n" +
+      "Backup: File → Download backup (.json).\n" +
+      "Open: File → Open deck file (replace) or Merge…\n\n" +
       "Library: github.com/MoribundMurdoch/MorTweetSRS-Decks",
   );
 }
@@ -559,7 +593,8 @@ function renderDeckLibrary(decks) {
               data-deck-file="${escapeHtml(deck.file)}"
               data-deck-name="${escapeHtml(deck.name)}"
               data-deck-posts="${deck.posts ?? ""}"
-            >Replace</button>
+              title="Wipe your current deck and load this one"
+            >Load</button>
             <button
               type="button"
               class="mor-btn deck-merge-btn"
@@ -568,6 +603,7 @@ function renderDeckLibrary(decks) {
               data-deck-file="${escapeHtml(deck.file)}"
               data-deck-name="${escapeHtml(deck.name)}"
               data-deck-posts="${deck.posts ?? ""}"
+              title="Add these cards to your current deck (keep yours)"
             >Merge</button>
           </div>
         </li>
@@ -612,7 +648,12 @@ function renderDeckLibraryError(message) {
  */
 async function loadDeckFromLibrary(deck, button, mode = "replace") {
   const deckName = deck.name || "Deck";
-  if (mode === "replace" && !confirmReplaceDeck(deckName, deck.posts)) return;
+  const knownCount = typeof deck.posts === "number" ? deck.posts : undefined;
+  // Confirm once: before download when catalog has a size, otherwise after parse.
+  if (knownCount !== undefined) {
+    if (mode === "replace" && !confirmReplaceDeck(deckName, knownCount)) return;
+    if (mode === "merge" && !confirmMergeDeck(deckName, knownCount)) return;
+  }
 
   const originalText = button.textContent;
   button.disabled = true;
@@ -625,10 +666,15 @@ async function loadDeckFromLibrary(deck, button, mode = "replace") {
       alert(result.error);
       return;
     }
+    const loadedName = result.collection.name?.trim() || deckName;
+    if (knownCount === undefined) {
+      if (mode === "replace" && !confirmReplaceDeck(loadedName, result.collection.posts.length)) return;
+      if (mode === "merge" && !confirmMergeDeck(loadedName, result.collection.posts.length)) return;
+    }
     if (mode === "merge") {
-      applyMergedDeck(result.collection, result.collection.name?.trim() || deckName);
+      applyMergedDeck(result.collection, loadedName);
     } else {
-      applyLoadedDeck(result.collection, result.collection.name?.trim() || deckName);
+      applyLoadedDeck(result.collection, loadedName);
     }
   } catch {
     alert("Could not load that deck. Check your connection and try again.");
@@ -639,13 +685,21 @@ async function loadDeckFromLibrary(deck, button, mode = "replace") {
 }
 
 function downloadDeck() {
+  // Ensure latest in-memory deck is persisted before export.
+  saveCollection(collection);
+  const name = deckFilename();
   const blob = new Blob([exportJson(collection)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = deckFilename();
+  a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
-  setStatusMessage(`Downloaded ${deckFilename()}.`);
+  const n = collection.posts.length;
+  setStatusMessage(
+    n
+      ? `Downloaded ${name} (${n} card${n === 1 ? "" : "s"}) · also auto-saves in this browser.`
+      : `Downloaded ${name} (empty deck) · also auto-saves in this browser.`,
+  );
 }
 
 async function initDeckLibrary() {
@@ -703,29 +757,176 @@ function saveEditCover() {
   }
 }
 
+/** @param {string} text @param {number} max */
+function truncateText(text, max) {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** @param {import('./store.js').TweetPost} post */
+function postStatusId(post) {
+  const m = post.url.match(/status\/(\d+)/);
+  return m ? m[1] : post.id;
+}
+
+/**
+ * Primary label for a deck card: cover prompt when present, else short post id.
+ * @param {import('./store.js').TweetPost} post
+ */
+function postListTitle(post) {
+  const cover = postCover(post);
+  if (cover?.type === "text" && cover.content.trim()) {
+    return truncateText(cover.content, 72);
+  }
+  if (cover?.type === "image") return "Image cover";
+  return `Post · ${postStatusId(post)}`;
+}
+
+/** @param {import('./store.js').TweetPost} post @param {'new'|'due'|'ok'} status */
+function postDueMeta(post, status) {
+  if (status === "new") return "Not studied yet";
+  if (status === "due") return "Due now";
+  try {
+    return `Due ${new Date(post.srs.due).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  } catch {
+    return "Scheduled";
+  }
+}
+
+/** @param {'new'|'due'|'ok'} status */
+function statusBadge(status) {
+  if (status === "new") return { className: "new", label: "New" };
+  if (status === "due") return { className: "due", label: "Due" };
+  return { className: "ok", label: "Later" };
+}
+
+/**
+ * Study a card from the list — even if it's not in today's due queue.
+ * @param {string} postId
+ */
+function focusCard(postId) {
+  const post = collection.posts.find((p) => p.id === postId);
+  if (!post) return;
+
+  let idx = queue.findIndex((p) => p.id === postId);
+  if (idx < 0) {
+    // Pull later/scheduled cards into the session so the list is always clickable.
+    queue = [post, ...queue.filter((p) => p.id !== postId)];
+    idx = 0;
+  }
+  queueIndex = idx;
+  showCurrentCard();
+  if (isOverlayLayout()) setPanel("left", false);
+}
+
 function renderPostList() {
+  if (!els.postList) return;
+
   const active = currentPost();
-  els.postList.innerHTML = collection.posts
+  const countEl = document.getElementById("cards-in-deck-count");
+  const emptyEl = document.getElementById("cards-empty");
+  const total = collection.posts.length;
+
+  if (countEl) countEl.textContent = String(total);
+
+  const filtered = collection.posts.filter((post) => {
+    if (cardsFilter === "all") return true;
+    const status = postStatus(post);
+    if (cardsFilter === "due") return status === "due";
+    if (cardsFilter === "new") return status === "new";
+    if (cardsFilter === "later") return status === "ok";
+    return true;
+  });
+
+  // Keep relative order: due/new first when viewing All feels more useful? Keep collection order (add order) for predictability.
+  const sorted = [...filtered].sort((a, b) => {
+    const rank = (p) => {
+      const s = postStatus(p);
+      if (s === "due") return 0;
+      if (s === "new") return 1;
+      return 2;
+    };
+    const d = rank(a) - rank(b);
+    if (d !== 0) return d;
+    return new Date(a.addedAt).getTime() - new Date(b.addedAt).getTime();
+  });
+
+  document.querySelectorAll("#cards-filter .cards-filter-btn").forEach((btn) => {
+    const on = btn.dataset.filter === cardsFilter;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+
+  if (!total) {
+    els.postList.innerHTML = "";
+    emptyEl?.classList.remove("hidden");
+    if (emptyEl) emptyEl.textContent = "No cards yet. Add a post URL above or open a deck file.";
+    syncBulkTextarea();
+    return;
+  }
+
+  if (!sorted.length) {
+    els.postList.innerHTML = "";
+    emptyEl?.classList.remove("hidden");
+    if (emptyEl) {
+      emptyEl.textContent =
+        cardsFilter === "due"
+          ? "Nothing due right now."
+          : cardsFilter === "new"
+            ? "No new cards."
+            : cardsFilter === "later"
+              ? "No scheduled cards yet."
+              : "No cards match this filter.";
+    }
+    syncBulkTextarea();
+    return;
+  }
+
+  emptyEl?.classList.add("hidden");
+
+  els.postList.innerHTML = sorted
     .map((post) => {
       const status = postStatus(post);
       const cover = postCover(post);
-      const dueLabel =
-        status === "new"
-          ? "new"
-          : status === "due"
-            ? "due now"
-            : `due ${new Date(post.srs.due).toLocaleDateString()}`;
+      const badge = statusBadge(status);
       const isEditing = editingPostId === post.id;
+      const isActive = active?.id === post.id;
+      const title = postListTitle(post);
+      const meta = postDueMeta(post, status);
+      const statusId = postStatusId(post);
+      const coverTag = cover
+        ? `<span class="post-cover-tag">${escapeHtml(coverLabel(cover))}</span>`
+        : `<span class="post-cover-tag muted">no cover</span>`;
+
+      let media = "";
+      if (cover?.type === "image" && cover.content) {
+        media = `<div class="post-thumb" aria-hidden="true"><img src="${escapeHtml(cover.content)}" alt="" loading="lazy" /></div>`;
+      } else if (cover?.type === "text") {
+        media = `<div class="post-thumb text-thumb" aria-hidden="true">Aa</div>`;
+      } else {
+        media = `<div class="post-thumb bare-thumb" aria-hidden="true">◎</div>`;
+      }
+
       return `
-        <li class="post-item ${active?.id === post.id ? "active" : ""} ${isEditing ? "editing" : ""}" data-id="${post.id}">
-          <span class="status-dot ${status}"></span>
+        <li
+          class="post-item status-${badge.className} ${isActive ? "active" : ""} ${isEditing ? "editing" : ""}"
+          data-id="${escapeHtml(post.id)}"
+          title="Study this card"
+        >
+          ${media}
           <div class="info">
-            <div class="url" title="${post.url}">${post.url}</div>
-            <div class="due-label">${dueLabel}${cover ? `<span class="post-cover-tag">${coverLabel(cover)}</span>` : ""}</div>
+            <div class="post-title">${escapeHtml(title)}</div>
+            <div class="post-meta">
+              <span class="post-badge ${badge.className}">${badge.label}</span>
+              <span class="post-due">${escapeHtml(meta)}</span>
+              ${coverTag}
+              <span class="post-id" title="${escapeHtml(post.url)}">#${escapeHtml(statusId)}</span>
+            </div>
           </div>
           <div class="post-actions">
-            <button class="post-edit-btn" type="button" title="Edit cover" aria-label="Edit cover" data-edit="${post.id}">✎</button>
-            <button class="post-remove-btn" type="button" title="Remove card" aria-label="Remove card" data-remove="${post.id}">×</button>
+            <button class="post-edit-btn" type="button" title="Edit cover" aria-label="Edit cover" data-edit="${escapeHtml(post.id)}">✎</button>
+            <button class="post-remove-btn" type="button" title="Remove card" aria-label="Remove card" data-remove="${escapeHtml(post.id)}">×</button>
           </div>
         </li>
       `;
@@ -736,12 +937,7 @@ function renderPostList() {
     item.addEventListener("click", (e) => {
       if (e.target.closest(".post-remove-btn") || e.target.closest(".post-edit-btn")) return;
       const id = item.dataset.id;
-      const idx = queue.findIndex((p) => p.id === id);
-      if (idx >= 0) {
-        queueIndex = idx;
-        showCurrentCard();
-        if (isOverlayLayout()) setPanel("left", false);
-      }
+      if (id) focusCard(id);
     });
   });
 
@@ -755,8 +951,11 @@ function renderPostList() {
   els.postList.querySelectorAll(".post-remove-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (editingPostId === btn.dataset.remove) closeEditCover();
-      deletePost(btn.dataset.remove);
+      const id = btn.dataset.remove;
+      if (!id) return;
+      if (!confirm("Remove this card from your deck?")) return;
+      if (editingPostId === id) closeEditCover();
+      deletePost(id);
     });
   });
 
@@ -999,7 +1198,7 @@ async function showCurrentCard() {
   els.tweetMetaInfo.innerHTML = `
     <span class="card-position">Card ${queueIndex + 1} of ${queue.length}</span>
     · <a href="${post.url}" target="_blank" rel="noopener">Open on X</a>
-    ${cover ? ` · <span class="post-cover-tag">${coverLabel(cover)}</span>` : ""}
+    ${cover ? ` · <span class="post-cover-tag">${escapeHtml(coverLabel(cover))}</span>` : ""}
   `;
 
   if (cover) {
@@ -1265,7 +1464,7 @@ function bindEvents() {
     try {
       result = await parseDeckFile(file);
     } catch {
-      alert("Could not read that file.");
+      alert("Could not read that file. Pick a .json deck export from this app.");
       return;
     }
 
@@ -1274,8 +1473,9 @@ function bindEvents() {
       return;
     }
 
-    const deckName = result.collection.name?.trim() || file.name.replace(/\.json$/i, "");
+    const deckName = result.collection.name?.trim() || file.name.replace(/\.json$/i, "") || "Imported";
     if (mode === "merge") {
+      if (!confirmMergeDeck(deckName, result.count)) return;
       applyMergedDeck(result.collection, deckName);
       return;
     }
@@ -1307,11 +1507,13 @@ function bindEvents() {
     }
     const deckName = result.collection.name?.trim() || "Deck";
     const mode = data.merge === true ? "merge" : "replace";
+    const count = result.collection.posts.length;
     if (mode === "merge") {
+      if (!confirmMergeDeck(deckName, count)) return;
       applyMergedDeck(result.collection, deckName);
       return;
     }
-    if (!confirmReplaceDeck(deckName, result.collection.posts.length)) return;
+    if (!confirmReplaceDeck(deckName, count)) return;
     applyLoadedDeck(result.collection, deckName);
   });
 
@@ -1325,6 +1527,15 @@ function bindEvents() {
   });
 
   document.getElementById("reset-progress")?.addEventListener("click", handleResetProgress);
+
+  document.getElementById("cards-filter")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-filter]");
+    if (!(btn instanceof HTMLElement) || !btn.dataset.filter) return;
+    const next = btn.dataset.filter;
+    if (next !== "all" && next !== "due" && next !== "new" && next !== "later") return;
+    cardsFilter = next;
+    renderPostList();
+  });
 
   els.menuBar?.addEventListener("click", (e) => {
     const actionBtn = e.target.closest("[data-action]");
