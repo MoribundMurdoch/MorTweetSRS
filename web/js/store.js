@@ -48,6 +48,14 @@ import { newSrsState, isDue } from "./srs.js";
 
 const STORAGE_KEY = "mor_tweet_srs_v1";
 
+/** @type {((collection: Collection) => void) | null} */
+let afterSaveHook = null;
+
+/** Optional hook (desktop dual-write to folder). */
+export function setAfterSave(hook) {
+  afterSaveHook = typeof hook === "function" ? hook : null;
+}
+
 /** @returns {Collection} */
 export function emptyCollection() {
   return { name: "My Tweets", posts: [], reviews: [] };
@@ -83,6 +91,11 @@ export function loadCollection() {
 /** @param {Collection} collection */
 export function saveCollection(collection) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
+  try {
+    afterSaveHook?.(collection);
+  } catch {
+    /* never break study flow on hook errors */
+  }
 }
 
 /** @param {string} url */

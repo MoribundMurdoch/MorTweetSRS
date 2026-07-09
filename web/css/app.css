@@ -1318,6 +1318,66 @@ a.mor-btn:hover {
   min-width: 0;
 }
 
+/* ── Local deck folder (desktop) ───────────────────────── */
+
+.local-library-section.hidden {
+  display: none;
+}
+
+.local-library-path {
+  margin: 0 0 4px;
+  font-family: var(--mor-mono);
+  font-size: 10px;
+  color: var(--editor-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.local-library-linked {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--editor-muted);
+}
+
+.local-library-linked.is-linked {
+  color: var(--editor-good);
+  font-weight: 500;
+}
+
+.linked-pill {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--editor-good);
+  background: color-mix(in srgb, var(--editor-good) 14%, transparent);
+  vertical-align: middle;
+}
+
+.deck-library-item.is-linked-deck {
+  border-color: color-mix(in srgb, var(--editor-good) 35%, var(--editor-border-soft));
+  background: color-mix(in srgb, var(--editor-good) 6%, var(--editor-panel));
+}
+
+.statusbar-linked {
+  font-family: var(--mor-mono);
+  font-size: 0.68rem;
+  max-width: 18%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+  color: var(--editor-good);
+}
+
+body.is-desktop-shell #backup-hint {
+  /* updated via text if needed; class for styling hooks */
+}
+
 .new-deck-section .mor-btn {
   width: 100%;
   min-height: 44px;

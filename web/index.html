@@ -42,9 +42,23 @@
             <span class="shortcut">Ctrl+Shift+O</span>
           </button>
           <button type="button" class="mor-menu-item" data-action="open-library" role="menuitem">
-            <span>Browse deck library…</span>
+            <span>Browse online library…</span>
           </button>
           <div class="mor-menu-divider" role="separator"></div>
+          <button type="button" class="mor-menu-item hidden" data-action="pick-deck-folder" data-desktop-only role="menuitem">
+            <span>Choose deck folder…</span>
+          </button>
+          <button type="button" class="mor-menu-item hidden" data-action="open-local-library" data-desktop-only role="menuitem">
+            <span>My decks (folder)…</span>
+          </button>
+          <button type="button" class="mor-menu-item hidden" data-action="save-to-folder" data-desktop-only role="menuitem">
+            <span>Save to deck folder…</span>
+            <span class="shortcut">Ctrl+Shift+S</span>
+          </button>
+          <button type="button" class="mor-menu-item hidden" data-action="clear-deck-folder" data-desktop-only role="menuitem">
+            <span>Clear deck folder path</span>
+          </button>
+          <div class="mor-menu-divider hidden" data-desktop-only role="separator"></div>
           <button type="button" class="mor-menu-item" data-action="download" role="menuitem">
             <span>Download backup (.json)…</span>
             <span class="shortcut">Ctrl+S</span>
@@ -194,8 +208,26 @@
           <span class="panel-badge" id="collection-count">0</span>
         </div>
         <div class="panel-body mor-scroll" id="deck-panel-body">
+          <section class="panel-section local-library-section hidden" id="local-library-section">
+            <h3 class="section-title">My decks</h3>
+            <p class="panel-hint">JSON files in a folder on this computer. <strong>Open</strong> replaces · <strong>Merge</strong> adds. Linked decks auto-save to disk.</p>
+            <p class="local-library-path" id="local-library-path">No folder set</p>
+            <p class="local-library-linked" id="local-library-linked">Not linked to a file</p>
+            <div class="local-library-list" id="local-library-list">
+              <p class="deck-library-status">Checking desktop library…</p>
+            </div>
+            <div class="mor-btn-row deck-library-actions">
+              <button type="button" class="mor-btn primary" id="pick-folder-btn">Choose folder…</button>
+              <button type="button" class="mor-btn" id="save-folder-btn">Save here</button>
+            </div>
+            <div class="mor-btn-row deck-library-actions">
+              <button type="button" class="mor-btn ghost" id="refresh-folder-btn">Refresh</button>
+              <button type="button" class="mor-btn ghost" id="clear-folder-btn">Clear path</button>
+            </div>
+          </section>
+
           <section class="panel-section deck-library-section" id="deck-library-section">
-            <h3 class="section-title">Deck library</h3>
+            <h3 class="section-title">Online library</h3>
             <p class="panel-hint"><strong>Load</strong> replaces your deck. <strong>Merge</strong> adds cards you don't already have.</p>
             <div class="deck-library-list" id="deck-library-list">
               <p class="deck-library-status">Loading decks…</p>
@@ -216,7 +248,7 @@
 
           <section class="panel-section deck-share-section">
             <h3 class="section-title">Backup &amp; share</h3>
-            <p class="panel-hint">Your deck auto-saves in this browser. Download a .json file to back up, share, or move to another device.</p>
+            <p class="panel-hint" id="backup-hint">Your deck auto-saves here. Download a .json file to back up, share, or move to another device.</p>
             <button type="button" class="mor-btn" id="share-deck-btn">Download backup</button>
           </section>
 
@@ -420,6 +452,7 @@
         <button type="button" class="statusbar-message hidden" id="status-message" title="Click to dismiss"></button>
       </div>
       <span class="statusbar-item" id="status-session" title="Study session progress">—</span>
+      <span class="statusbar-item statusbar-linked hidden" id="status-linked-file" title="Linked deck file"></span>
       <span class="statusbar-item statusbar-theme" id="status-theme" title="Color theme">dark</span>
     </footer>
 
@@ -443,6 +476,6 @@
     </nav>
   </div>
 
-  <script type="module" src="js/app.js?v=23"></script>
+  <script type="module" src="js/app.js?v=24"></script>
 </body>
 </html>

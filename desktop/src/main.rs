@@ -1,3 +1,5 @@
+mod deck_folder;
+mod desktop_api;
 mod web_assets;
 
 use dioxus::desktop::tao::window::Icon;
@@ -47,6 +49,18 @@ fn main() {
         .with_disable_drag_drop_handler(true)
         .with_background_color((18, 20, 26, 255))
         .with_asynchronous_custom_protocol("mortweet", |_id, request, responder| {
+            // Folder picker can block; run API off the wry callback when needed.
+            if desktop_api::is_api_request(&request) {
+                let is_pick = request.uri().path().contains("local-library/pick");
+                if is_pick {
+                    std::thread::spawn(move || {
+                        responder.respond(desktop_api::handle(request));
+                    });
+                } else {
+                    responder.respond(desktop_api::handle(request));
+                }
+                return;
+            }
             responder.respond(web_assets::serve(&request));
         });
 

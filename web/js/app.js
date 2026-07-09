@@ -1,6 +1,7 @@
 import {
   loadCollection,
   saveCollection,
+  setAfterSave,
   addPost,
   removePost,
   updatePostCover,
@@ -50,6 +51,17 @@ import {
   fetchDeckCatalog,
   fetchDeckText,
 } from "./deck-library.js";
+import {
+  isDesktopShell,
+  fetchLocalLibrary,
+  pickLocalFolder,
+  clearLocalFolder,
+  readLocalDeck,
+  writeLocalDeck,
+  suggestLocalFilename,
+  getLinkedFile,
+  setLinkedFile,
+} from "./local-library.js";
 
 /** @type {ReturnType<typeof loadCollection>} */
 let collection = loadCollection();
@@ -65,6 +77,12 @@ let editingPostId = null;
 let cardsFilter = "all";
 /** @type {ReturnType<typeof setTimeout> | null} */
 let statusMessageTimer = null;
+/** @type {boolean} */
+let desktopShell = false;
+/** @type {import('./local-library.js').LocalLibraryState | null} */
+let localLibraryState = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let folderSyncTimer = null;
 
 const addCoverForm = createCoverForm(
   {
@@ -314,19 +332,31 @@ function confirmMergeDeck(deckName, incomingCount) {
   );
 }
 
-function applyLoadedDeck(nextCollection, deckName) {
+/**
+ * @param {import('./store.js').Collection} nextCollection
+ * @param {string} deckName
+ * @param {{ linkedFile?: string | null }} [opts]
+ */
+function applyLoadedDeck(nextCollection, deckName, opts = {}) {
   collection = nextCollection;
+  if ("linkedFile" in opts) {
+    setLinkedFile(opts.linkedFile ?? null);
+  } else {
+    setLinkedFile(null);
+  }
   saveCollection(collection);
   bulkDirty = false;
   editingPostId = null;
   closeEditCover();
   if (isOverlayLayout()) setPanel("left", false);
   startSession();
+  refreshLocalLibraryChrome();
   const n = collection.posts.length;
+  const link = getLinkedFile();
   setStatusMessage(
     n
-      ? `Loaded "${deckName}" — ${n} card${n === 1 ? "" : "s"} ready (auto-saved).`
-      : `Loaded empty deck "${deckName}" (auto-saved).`,
+      ? `Loaded "${deckName}" — ${n} card${n === 1 ? "" : "s"} ready${link ? ` · ${link}` : ""}.`
+      : `Loaded empty deck "${deckName}"${link ? ` · ${link}` : ""}.`,
   );
 }
 
@@ -347,6 +377,245 @@ function applyMergedDeck(incoming, deckName) {
     parts.push(`now ${before + added} total`);
     setStatusMessage(parts.join(", ") + ".");
   }
+}
+
+function scheduleFolderSync() {
+  if (!desktopShell || !getLinkedFile() || !localLibraryState?.folder) return;
+  if (folderSyncTimer) clearTimeout(folderSyncTimer);
+  folderSyncTimer = setTimeout(() => {
+    folderSyncTimer = null;
+    void syncLinkedDeckToFolder({ quiet: true });
+  }, 400);
+}
+
+/**
+ * @param {{ quiet?: boolean, file?: string }} [opts]
+ */
+async function syncLinkedDeckToFolder(opts = {}) {
+  if (!desktopShell || !localLibraryState?.folder) return false;
+  const file = opts.file || getLinkedFile();
+  if (!file) return false;
+  try {
+    await writeLocalDeck(file, exportJson(collection));
+    setLinkedFile(file);
+    if (!opts.quiet) setStatusMessage(`Saved to folder · ${file}`);
+    await refreshLocalLibrary({ quiet: true });
+    return true;
+  } catch (e) {
+    if (!opts.quiet) {
+      alert(e instanceof Error ? e.message : "Could not save to folder.");
+    }
+    return false;
+  }
+}
+
+function refreshLocalLibraryChrome() {
+  const section = document.getElementById("local-library-section");
+  section?.classList.toggle("hidden", !desktopShell);
+
+  document.querySelectorAll("[data-desktop-only]").forEach((el) => {
+    el.classList.toggle("hidden", !desktopShell);
+  });
+
+  const pathEl = document.getElementById("local-library-path");
+  const linkedEl = document.getElementById("local-library-linked");
+  if (pathEl) {
+    pathEl.textContent = localLibraryState?.folder
+      ? localLibraryState.folder
+      : "No folder set";
+    pathEl.title = localLibraryState?.folder || "Choose a folder to store deck JSON files";
+  }
+  if (linkedEl) {
+    const linked = getLinkedFile();
+    linkedEl.textContent = linked ? `Linked · ${linked}` : "Not linked to a file";
+    linkedEl.classList.toggle("is-linked", Boolean(linked));
+  }
+
+  if (els.statusTheme) {
+    /* keep existing theme text; linked file goes on status if needed */
+  }
+  const statusLink = document.getElementById("status-linked-file");
+  if (statusLink) {
+    const linked = getLinkedFile();
+    statusLink.textContent = linked ? linked : "";
+    statusLink.classList.toggle("hidden", !linked);
+    statusLink.title = linked ? `Linked deck file in folder` : "";
+  }
+}
+
+/**
+ * @param {{ quiet?: boolean }} [opts]
+ */
+async function refreshLocalLibrary(opts = {}) {
+  if (!desktopShell) return;
+  try {
+    localLibraryState = await fetchLocalLibrary();
+    renderLocalLibrary();
+    refreshLocalLibraryChrome();
+    if (localLibraryState.error && !opts.quiet) {
+      setStatusMessage(localLibraryState.error);
+    }
+  } catch {
+    localLibraryState = { folder: null, decks: [], error: "Local library unavailable." };
+    renderLocalLibrary();
+    refreshLocalLibraryChrome();
+  }
+}
+
+function renderLocalLibrary() {
+  const list = document.getElementById("local-library-list");
+  if (!list) return;
+
+  if (!localLibraryState?.folder) {
+    list.innerHTML = `<p class="deck-library-status">Choose a folder to keep your study decks as JSON files on disk.</p>`;
+    return;
+  }
+
+  if (localLibraryState.error) {
+    list.innerHTML = `<p class="deck-library-status deck-library-error">${escapeHtml(localLibraryState.error)}</p>`;
+    return;
+  }
+
+  const decks = localLibraryState.decks || [];
+  if (!decks.length) {
+    list.innerHTML = `<p class="deck-library-status">Folder is empty. Save your current deck here to create the first file.</p>`;
+    return;
+  }
+
+  const linked = getLinkedFile();
+  list.innerHTML = `<ul class="deck-library-items local-deck-items">${decks
+    .map((deck) => {
+      const isLinked = linked === deck.file;
+      const countLabel = `${deck.posts} card${deck.posts === 1 ? "" : "s"}`;
+      return `
+        <li class="deck-library-item ${isLinked ? "is-linked-deck" : ""}">
+          <div class="deck-library-info">
+            <div class="deck-library-name">${escapeHtml(deck.name)}${isLinked ? ' <span class="linked-pill">linked</span>' : ""}</div>
+            <div class="deck-library-meta">${escapeHtml(countLabel)} · ${escapeHtml(deck.file)}</div>
+          </div>
+          <div class="deck-library-btns">
+            <button type="button" class="mor-btn primary local-load-btn" data-mode="replace" data-file="${escapeHtml(deck.file)}" data-name="${escapeHtml(deck.name)}" data-posts="${deck.posts}" title="Replace your current deck with this file">Open</button>
+            <button type="button" class="mor-btn local-load-btn" data-mode="merge" data-file="${escapeHtml(deck.file)}" data-name="${escapeHtml(deck.name)}" data-posts="${deck.posts}" title="Merge cards into your current deck">Merge</button>
+          </div>
+        </li>
+      `;
+    })
+    .join("")}</ul>`;
+
+  list.querySelectorAll(".local-load-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      void loadDeckFromLocalFile({
+        file: btn.dataset.file,
+        name: btn.dataset.name,
+        posts: Number(btn.dataset.posts) || 0,
+        mode: btn.dataset.mode === "merge" ? "merge" : "replace",
+        button: btn,
+      });
+    });
+  });
+}
+
+/**
+ * @param {{ file?: string, name?: string, posts?: number, mode: 'replace'|'merge', button: HTMLButtonElement }} opts
+ */
+async function loadDeckFromLocalFile(opts) {
+  const file = opts.file;
+  if (!file) return;
+  const deckName = opts.name || file.replace(/\.json$/i, "");
+  if (opts.mode === "replace" && !confirmReplaceDeck(deckName, opts.posts)) return;
+  if (opts.mode === "merge" && !confirmMergeDeck(deckName, opts.posts)) return;
+
+  const original = opts.button.textContent;
+  opts.button.disabled = true;
+  opts.button.textContent = "Loading…";
+  try {
+    const json = await readLocalDeck(file);
+    const result = parseDeckJson(json);
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
+    const loadedName = result.collection.name?.trim() || deckName;
+    if (opts.mode === "merge") {
+      applyMergedDeck(result.collection, loadedName);
+    } else {
+      applyLoadedDeck(result.collection, loadedName, { linkedFile: file });
+    }
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Could not open that deck.");
+  } finally {
+    opts.button.disabled = false;
+    opts.button.textContent = original;
+  }
+}
+
+async function handlePickLocalFolder() {
+  if (!desktopShell) return;
+  try {
+    setStatusMessage("Choose a deck folder…");
+    localLibraryState = await pickLocalFolder();
+    renderLocalLibrary();
+    refreshLocalLibraryChrome();
+    if (localLibraryState.folder) {
+      setStatusMessage(`Deck folder · ${localLibraryState.folder}`);
+      setPanel("left", true);
+      document.getElementById("local-library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      setStatusMessage("No folder selected.");
+    }
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Could not open folder picker.");
+  }
+}
+
+async function handleClearLocalFolder() {
+  if (!desktopShell) return;
+  if (!localLibraryState?.folder) {
+    setStatusMessage("No deck folder set.");
+    return;
+  }
+  if (!confirm("Stop using this deck folder?\n\nFiles on disk are kept. Only the remembered path is cleared.")) {
+    return;
+  }
+  try {
+    localLibraryState = await clearLocalFolder();
+    setLinkedFile(null);
+    renderLocalLibrary();
+    refreshLocalLibraryChrome();
+    setStatusMessage("Deck folder cleared.");
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Could not clear folder.");
+  }
+}
+
+async function handleSaveToFolder() {
+  if (!desktopShell) {
+    downloadDeck();
+    return;
+  }
+  if (!localLibraryState?.folder) {
+    const pick = confirm("No deck folder set yet.\n\nChoose a folder to save your decks as JSON files?");
+    if (!pick) return;
+    await handlePickLocalFolder();
+    if (!localLibraryState?.folder) return;
+  }
+
+  let file = getLinkedFile();
+  if (!file) {
+    const suggested = await suggestLocalFilename(collection.name || "deck");
+    const entered = prompt("File name in deck folder:", suggested);
+    if (entered === null) return;
+    file = entered.trim();
+    if (!file.toLowerCase().endsWith(".json")) file = `${file}.json`;
+  }
+
+  const ok = await syncLinkedDeckToFolder({ file, quiet: false });
+  if (ok) refreshLocalLibraryChrome();
+}
+
+function openLocalLibrary() {
+  setPanel("left", true);
+  document.getElementById("local-library-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function openDeckLibrary() {
@@ -387,6 +656,7 @@ function handleStartNewDeck(opts = {}) {
   }
 
   startNewDeck(collection, name);
+  setLinkedFile(null);
   if (nameInput) nameInput.value = name;
   bulkDirty = false;
   els.bulkInput.value = "";
@@ -395,6 +665,7 @@ function handleStartNewDeck(opts = {}) {
   startSession();
   setPanel("left", true);
   els.urlInput?.focus();
+  refreshLocalLibraryChrome();
   setStatusMessage(`Started new deck "${name}".`);
 }
 
@@ -419,6 +690,7 @@ function handleClearDeck() {
   closeEditCover();
   startSession();
   setStatusMessage("Deck cleared.");
+  // Keep linked file so empty deck can still save to the same path.
 }
 
 function handleRenameDeck() {
@@ -470,8 +742,9 @@ function showShortcutsHelp() {
       "  Ctrl+N — new deck\n" +
       "  Ctrl+O — open deck file (replace)\n" +
       "  Ctrl+Shift+O — merge deck file\n" +
-      "  Ctrl+S — download .json backup\n\n" +
-      "Your deck auto-saves in this browser.\n" +
+      "  Ctrl+S — download .json backup\n" +
+      (desktopShell ? "  Ctrl+Shift+S — save to deck folder\n" : "") +
+      "\nYour deck auto-saves in this app.\n" +
       "Menu bar: File · Deck · View · Help",
   );
 }
@@ -480,10 +753,12 @@ function showAbout() {
   alert(
     "MorTweet SRS\n\n" +
       "Spaced repetition for saved X posts.\n\n" +
-      "Saving: your deck auto-saves in this browser/device.\n" +
-      "Backup: File → Download backup (.json).\n" +
-      "Open: File → Open deck file (replace) or Merge…\n\n" +
-      "Library: github.com/MoribundMurdoch/MorTweetSRS-Decks",
+      "Saving: auto-saves in this app.\n" +
+      (desktopShell
+        ? "Desktop: File → Choose deck folder… stores JSON decks on disk.\nLinked decks dual-write to that folder.\n"
+        : "Backup: File → Download backup (.json).\n") +
+      "Open / Merge: load deck files without losing work (merge keeps yours).\n\n" +
+      "Online library: github.com/MoribundMurdoch/MorTweetSRS-Decks",
   );
 }
 
@@ -513,6 +788,18 @@ function runMenuAction(action) {
       break;
     case "open-library":
       openDeckLibrary();
+      break;
+    case "open-local-library":
+      openLocalLibrary();
+      break;
+    case "pick-deck-folder":
+      void handlePickLocalFolder();
+      break;
+    case "clear-deck-folder":
+      void handleClearLocalFolder();
+      break;
+    case "save-to-folder":
+      void handleSaveToFolder();
       break;
     case "download":
       downloadDeck();
@@ -674,7 +961,7 @@ async function loadDeckFromLibrary(deck, button, mode = "replace") {
     if (mode === "merge") {
       applyMergedDeck(result.collection, loadedName);
     } else {
-      applyLoadedDeck(result.collection, loadedName);
+      applyLoadedDeck(result.collection, loadedName, { linkedFile: null });
     }
   } catch {
     alert("Could not load that deck. Check your connection and try again.");
@@ -687,6 +974,8 @@ async function loadDeckFromLibrary(deck, button, mode = "replace") {
 function downloadDeck() {
   // Ensure latest in-memory deck is persisted before export.
   saveCollection(collection);
+  // Desktop: if linked to a folder file, keep disk copy fresh too.
+  void syncLinkedDeckToFolder({ quiet: true });
   const name = deckFilename();
   const blob = new Blob([exportJson(collection)], { type: "application/json" });
   const a = document.createElement("a");
@@ -697,8 +986,8 @@ function downloadDeck() {
   const n = collection.posts.length;
   setStatusMessage(
     n
-      ? `Downloaded ${name} (${n} card${n === 1 ? "" : "s"}) · also auto-saves in this browser.`
-      : `Downloaded ${name} (empty deck) · also auto-saves in this browser.`,
+      ? `Downloaded ${name} (${n} card${n === 1 ? "" : "s"}) · also auto-saves here.`
+      : `Downloaded ${name} (empty deck) · also auto-saves here.`,
   );
 }
 
@@ -1480,7 +1769,7 @@ function bindEvents() {
       return;
     }
     if (!confirmReplaceDeck(deckName, result.count)) return;
-    applyLoadedDeck(result.collection, deckName);
+    applyLoadedDeck(result.collection, deckName, { linkedFile: null });
   }
 
   els.importFile?.addEventListener("change", async () => {
@@ -1514,7 +1803,7 @@ function bindEvents() {
       return;
     }
     if (!confirmReplaceDeck(deckName, count)) return;
-    applyLoadedDeck(result.collection, deckName);
+    applyLoadedDeck(result.collection, deckName, { linkedFile: null });
   });
 
   els.studyAgainBtn.addEventListener("click", startSession);
@@ -1535,6 +1824,19 @@ function bindEvents() {
     if (next !== "all" && next !== "due" && next !== "new" && next !== "later") return;
     cardsFilter = next;
     renderPostList();
+  });
+
+  document.getElementById("pick-folder-btn")?.addEventListener("click", () => {
+    void handlePickLocalFolder();
+  });
+  document.getElementById("save-folder-btn")?.addEventListener("click", () => {
+    void handleSaveToFolder();
+  });
+  document.getElementById("refresh-folder-btn")?.addEventListener("click", () => {
+    void refreshLocalLibrary();
+  });
+  document.getElementById("clear-folder-btn")?.addEventListener("click", () => {
+    void handleClearLocalFolder();
   });
 
   els.menuBar?.addEventListener("click", (e) => {
@@ -1590,7 +1892,8 @@ function bindEvents() {
       }
       if (key === "s") {
         e.preventDefault();
-        runMenuAction("download");
+        if (e.shiftKey && desktopShell) runMenuAction("save-to-folder");
+        else runMenuAction("download");
         return;
       }
     }
@@ -1636,6 +1939,7 @@ function initTheme() {
 setYoutubeHost(els.coverYoutubeHost);
 addCoverForm.reset();
 initTheme();
+setAfterSave(() => scheduleFolderSync());
 bindEvents();
 initResponsiveLayout();
 void bootstrapTtsProvider().then(() => {
@@ -1643,3 +1947,16 @@ void bootstrapTtsProvider().then(() => {
   startSession();
 });
 void initDeckLibrary();
+void (async () => {
+  desktopShell = await isDesktopShell();
+  refreshLocalLibraryChrome();
+  if (desktopShell) {
+    document.body.classList.add("is-desktop-shell");
+    const hint = document.getElementById("backup-hint");
+    if (hint) {
+      hint.textContent =
+        "Auto-saves here. With a deck folder set, linked decks also write JSON to disk. Download for a one-off backup.";
+    }
+    await refreshLocalLibrary({ quiet: true });
+  }
+})();
